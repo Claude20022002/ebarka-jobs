@@ -45,7 +45,7 @@ export type Job = {
   description: string;
   benefits: string | null;
   application_requirements: string | null;
-  apply_url: string;
+  apply_url: string | null;
   posted_date: string;
   valid_through?: string | null;
   job_identifier?: string | null;

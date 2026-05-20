@@ -198,6 +198,18 @@ function normalizeApplicationRequirements(value: unknown): string | null {
   return requirementsText;
 }
 
+function sanitizeApplyUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+  try {
+    const { protocol } = new URL(trimmed);
+    return protocol === 'http:' || protocol === 'https:' ? trimmed : null;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeVisaSponsorship(
   value: unknown
 ): 'Yes' | 'No' | 'Not specified' {
@@ -254,7 +266,7 @@ export const getJobs = cache(async (): Promise<Job[]> => {
         application_requirements: normalizeApplicationRequirements(
           fields.application_requirements
         ),
-        apply_url: fields.apply_url as string,
+        apply_url: sanitizeApplyUrl(fields.apply_url),
         posted_date: fields.posted_date as string,
         valid_through: (fields.valid_through as string) || null,
         job_identifier: (fields.job_identifier as string) || null,

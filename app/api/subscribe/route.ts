@@ -3,98 +3,102 @@ import config from '@/config';
 import { RATE_LIMIT_WINDOW_MS } from '@/lib/constants/defaults';
 import { emailProvider } from '@/lib/email';
 
-// Prevent caching
 export const dynamic = 'force-dynamic';
 
-// Simple in-memory rate limiter
-// In a production environment, you would use Redis or another distributed cache
 type RateLimitInfo = {
   count: number;
   resetTime: number;
 };
 
-// Store IP addresses and their request counts
-// This will be reset when the server restarts
+// In-memory rate limiter — replace with Upstash Redis in a future PR.
 const rateLimitMap = new Map<string, RateLimitInfo>();
 
-// Rate limit configuration
-const RATE_LIMIT_MAX = 5; // Maximum requests per window
+const RATE_LIMIT_MAX = 5;
 
-// Email validation regex
-const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-
-// Rate limiting function
 function isRateLimited(ip: string): boolean {
   const now = Date.now();
-  const rateLimitInfo = rateLimitMap.get(ip);
+  const info = rateLimitMap.get(ip);
 
-  if (!rateLimitInfo) {
-    // First request from this IP
-    rateLimitMap.set(ip, {
-      count: 1,
-      resetTime: now + RATE_LIMIT_WINDOW_MS,
-    });
+  if (!info || now > info.resetTime) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
     return false;
   }
 
-  if (now > rateLimitInfo.resetTime) {
-    // Reset window has passed
-    rateLimitMap.set(ip, {
-      count: 1,
-      resetTime: now + RATE_LIMIT_WINDOW_MS,
-    });
-    return false;
-  }
+  info.count += 1;
+  rateLimitMap.set(ip, info);
+  return info.count > RATE_LIMIT_MAX;
+}
 
-  // Increment count
-  rateLimitInfo.count += 1;
-  rateLimitMap.set(ip, rateLimitInfo);
+// RFC 5321 / RFC 5322 — structural validation without regex to avoid ReDoS.
+function isValidEmail(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > 254) return false;
+  const atIndex = trimmed.lastIndexOf('@');
+  if (atIndex < 1) return false;
+  const local = trimmed.slice(0, atIndex);
+  const domain = trimmed.slice(atIndex + 1);
+  if (local.length === 0 || local.length > 64) return false;
+  const dotIndex = domain.lastIndexOf('.');
+  if (dotIndex < 1 || dotIndex === domain.length - 1) return false;
+  return domain.slice(dotIndex + 1).length >= 2;
+}
 
-  // Check if over limit
-  return rateLimitInfo.count > RATE_LIMIT_MAX;
+function isValidName(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.trim().length > 0 &&
+    value.trim().length <= 100
+  );
 }
 
 export async function POST(request: Request) {
+  if (!config.jobAlerts?.enabled) {
+    return NextResponse.json(
+      { error: 'Job alerts feature is disabled' },
+      { status: 404 }
+    );
+  }
+
+  const clientIp =
+    request.headers.get('x-forwarded-for')?.split(',').at(0)?.trim() ??
+    request.headers.get('x-real-ip') ??
+    (process.env.NODE_ENV === 'development' ? '203.0.113.1' : 'unknown');
+
+  if (isRateLimited(clientIp)) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      { status: 429 }
+    );
+  }
+
+  let body: unknown;
   try {
-    // Check if job alerts feature is enabled
-    if (!config.jobAlerts?.enabled) {
-      return NextResponse.json(
-        { error: 'Job alerts feature is disabled' },
-        { status: 404 }
-      );
-    }
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
+  }
 
-    // Get client IP with fallback for development
-    const clientIp =
-      request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
-      request.headers.get('x-real-ip') ||
-      (process.env.NODE_ENV === 'development' ? '203.0.113.1' : 'unknown');
+  const raw = body as Record<string, unknown>;
 
-    // Check rate limit
-    if (isRateLimited(clientIp)) {
-      return NextResponse.json(
-        { error: 'Too many requests. Please try again later.' },
-        { status: 429 }
-      );
-    }
+  if (!isValidEmail(raw.email)) {
+    return NextResponse.json(
+      { error: 'A valid email address is required.' },
+      { status: 400 }
+    );
+  }
 
-    // Get and validate form data
-    const { name, email } = await request.json();
+  if (!isValidName(raw.name)) {
+    return NextResponse.json(
+      { error: 'Name is required and must be 100 characters or fewer.' },
+      { status: 400 }
+    );
+  }
 
-    // Validate email format with a more comprehensive check
-    if (!(email && EMAIL_REGEX.test(email))) {
-      return NextResponse.json(
-        { error: 'Valid email address is required' },
-        { status: 400 }
-      );
-    }
+  const email = raw.email.trim();
+  const name = (raw.name as string).trim();
 
-    // Validate name is provided and not empty
-    if (!name || name.trim() === '') {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
-    }
-
-    // Subscribe the user
+  try {
     await emailProvider.subscribe({
       email,
       name,
@@ -108,14 +112,9 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error';
-
+  } catch {
     return NextResponse.json(
-      {
-        error: errorMessage,
-      },
+      { error: 'An error occurred. Please try again later.' },
       { status: 500 }
     );
   }

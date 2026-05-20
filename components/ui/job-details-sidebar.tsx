@@ -40,7 +40,7 @@ type JobDetailsSidebarProps = {
   workplace_country: string | null;
   salary: Salary | null;
   career_level: CareerLevel[];
-  apply_url: string;
+  apply_url: string | null;
   visa_sponsorship: string;
   languages: LanguageCode[];
   benefits: string | null;
@@ -273,7 +273,7 @@ export function JobDetailsSidebar({
         </div>
       </div>
 
-      {job_source_name && (
+      {job_source_name && apply_url && (
         <div>
           <div className="mb-1 flex items-center gap-2">
             <Link className="h-4 w-4 shrink-0 text-gray-500" />

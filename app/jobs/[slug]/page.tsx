@@ -257,24 +257,29 @@ export default async function JobPostPage({
                     </>
                   )}
                 </div>
-                <Button
-                  asChild
-                  className="w-full gap-1.5 text-xs sm:w-auto"
-                  size="xs"
-                  style={{
-                    backgroundColor: resolveColor(config.ui.primaryColor),
-                  }}
-                  variant="primary"
-                >
-                  <a
-                    href={job.apply_url}
-                    rel="noopener noreferrer"
-                    target="_blank"
+                {job.apply_url && (
+                  <Button
+                    asChild
+                    className="w-full gap-1.5 text-xs sm:w-auto"
+                    size="xs"
+                    style={{
+                      backgroundColor: resolveColor(config.ui.primaryColor),
+                    }}
+                    variant="primary"
                   >
-                    Apply Now
-                    <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
-                  </a>
-                </Button>
+                    <a
+                      href={job.apply_url}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                    >
+                      Apply Now
+                      <ArrowUpRight
+                        aria-hidden="true"
+                        className="h-3.5 w-3.5"
+                      />
+                    </a>
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -439,24 +444,26 @@ export default async function JobPostPage({
 
           <div className="mt-8">
             <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-center">
-              <Button
-                asChild
-                className="w-full gap-1.5 text-xs sm:w-auto"
-                size="xs"
-                style={{
-                  backgroundColor: resolveColor(config.ui.primaryColor),
-                }}
-                variant="primary"
-              >
-                <a
-                  href={job.apply_url}
-                  rel="noopener noreferrer"
-                  target="_blank"
+              {job.apply_url && (
+                <Button
+                  asChild
+                  className="w-full gap-1.5 text-xs sm:w-auto"
+                  size="xs"
+                  style={{
+                    backgroundColor: resolveColor(config.ui.primaryColor),
+                  }}
+                  variant="primary"
                 >
-                  Apply Now
-                  <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
-                </a>
-              </Button>
+                  <a
+                    href={job.apply_url}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    Apply Now
+                    <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+                  </a>
+                </Button>
+              )}
               {job.valid_through &&
                 (() => {
                   const deadline = new Date(job.valid_through);

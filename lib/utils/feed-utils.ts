@@ -1,7 +1,7 @@
 import { Feed } from 'feed';
 import config from '@/config';
 import { DEFAULT_DESCRIPTION_LENGTH } from '@/lib/constants/defaults';
-import { formatSalary } from '@/lib/db/airtable';
+import { formatSalary, type Salary } from '@/lib/db/airtable';
 import { getJobs } from '@/lib/db/airtable.server';
 import { generateJobSlug } from '@/lib/utils/slugify';
 
@@ -23,10 +23,10 @@ export type JobItem = {
   workplace_type: string;
   workplace_city?: string;
   workplace_country?: string;
-  salary?: any;
+  salary?: Salary | null;
   posted_date?: string;
   description: string;
-  apply_url: string;
+  apply_url: string | null;
   status: string;
 };
 
@@ -100,7 +100,7 @@ export function createJobDescription(
 
 ${job.description.substring(0, descriptionLength)}...
 
-**Apply Now:** ${job.apply_url}
+**Apply Now:** ${job.apply_url ?? 'Not specified'}
 `;
 }
 
@@ -127,7 +127,7 @@ export function addJobToFeed(
     author: [
       {
         name: job.company,
-        link: job.apply_url,
+        link: job.apply_url ?? undefined,
       },
     ],
     date:
