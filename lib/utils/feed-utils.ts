@@ -1,6 +1,5 @@
 import { Feed } from 'feed';
 import config from '@/config';
-import { DEFAULT_DESCRIPTION_LENGTH } from '@/lib/constants/defaults';
 import { formatSalary, type Salary } from '@/lib/db/airtable';
 import { getJobs } from '@/lib/db/airtable.server';
 import { generateJobSlug } from '@/lib/utils/slugify';

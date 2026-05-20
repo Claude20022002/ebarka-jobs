@@ -17,6 +17,7 @@ const contentSecurityPolicy = [
 ].join('; ');
 
 const nextConfig: NextConfig = {
+  // biome-ignore lint/suspicious/useAwait: NextConfig.headers must return Promise<Header[]>
   async headers() {
     return [
       {

@@ -5,6 +5,12 @@ import { emailProvider } from '@/lib/email';
 
 export const dynamic = 'force-dynamic';
 
+// RFC 5321 / RFC 5322 length limits
+const EMAIL_MAX_LENGTH = 254;
+const EMAIL_LOCAL_MAX_LENGTH = 64;
+const NAME_MAX_LENGTH = 100;
+const MIN_TLD_LENGTH = 2;
+
 type RateLimitInfo = {
   count: number;
   resetTime: number;
@@ -31,24 +37,34 @@ function isRateLimited(ip: string): boolean {
 
 // RFC 5321 / RFC 5322 — structural validation without regex to avoid ReDoS.
 function isValidEmail(value: unknown): value is string {
-  if (typeof value !== 'string') return false;
+  if (typeof value !== 'string') {
+    return false;
+  }
   const trimmed = value.trim();
-  if (trimmed.length === 0 || trimmed.length > 254) return false;
+  if (trimmed.length === 0 || trimmed.length > EMAIL_MAX_LENGTH) {
+    return false;
+  }
   const atIndex = trimmed.lastIndexOf('@');
-  if (atIndex < 1) return false;
+  if (atIndex < 1) {
+    return false;
+  }
   const local = trimmed.slice(0, atIndex);
   const domain = trimmed.slice(atIndex + 1);
-  if (local.length === 0 || local.length > 64) return false;
+  if (local.length === 0 || local.length > EMAIL_LOCAL_MAX_LENGTH) {
+    return false;
+  }
   const dotIndex = domain.lastIndexOf('.');
-  if (dotIndex < 1 || dotIndex === domain.length - 1) return false;
-  return domain.slice(dotIndex + 1).length >= 2;
+  if (dotIndex < 1 || dotIndex === domain.length - 1) {
+    return false;
+  }
+  return domain.slice(dotIndex + 1).length >= MIN_TLD_LENGTH;
 }
 
 function isValidName(value: unknown): value is string {
   return (
     typeof value === 'string' &&
     value.trim().length > 0 &&
-    value.trim().length <= 100
+    value.trim().length <= NAME_MAX_LENGTH
   );
 }
 
