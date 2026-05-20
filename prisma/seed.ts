@@ -1,20 +1,35 @@
-import { PrismaClient } from '@prisma/client';
+import { CareerLevel, type Prisma, PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-');
-}
+const seedLogger = {
+  info(message: string) {
+    process.stdout.write(`${message}\n`);
+  },
+  error(message: string, error: unknown) {
+    const details =
+      error instanceof Error ? (error.stack ?? error.message) : String(error);
+    process.stderr.write(`${message}\n${details}\n`);
+  },
+};
+
+type SeedJob = Omit<
+  Prisma.JobUncheckedCreateInput,
+  | 'id'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'careerLevels'
+  | 'languages'
+  | 'applications'
+  | 'savedBy'
+  | 'payment'
+> & {
+  careerLevels: CareerLevel[];
+  languages: string[];
+};
 
 async function main() {
-  console.log('🌱 Démarrage du seed...');
+  seedLogger.info('Demarrage du seed...');
 
   // ── Nettoyage ──────────────────────────────────────────────────────────────
   await prisma.jobAlert.deleteMany();
@@ -32,7 +47,7 @@ async function main() {
   await prisma.user.deleteMany();
   await prisma.company.deleteMany();
 
-  console.log('🗑️  Base de données nettoyée');
+  seedLogger.info('Base de donnees nettoyee');
 
   // ── Entreprises ────────────────────────────────────────────────────────────
   const acme = await prisma.company.create({
@@ -72,7 +87,7 @@ async function main() {
       logo: null,
       website: 'https://dataflow-ai.example.com',
       description:
-        'Leader européen de l\'analyse de données en temps réel. Notre plateforme traite plus de 10 milliards d\'événements par jour pour 500+ clients enterprise.',
+        "Leader européen de l'analyse de données en temps réel. Notre plateforme traite plus de 10 milliards d'événements par jour pour 500+ clients enterprise.",
       industry: 'Data / Intelligence Artificielle',
       size: 'MEDIUM',
       location: 'Bordeaux, France',
@@ -80,41 +95,37 @@ async function main() {
     },
   });
 
-  console.log('🏢 3 entreprises créées');
+  seedLogger.info('3 entreprises creees');
 
   // ── Utilisateurs ───────────────────────────────────────────────────────────
-  const employerUser = await prisma.user.create({
-    data: {
-      email: 'employer@acme-tech.example.com',
-      name: 'Marie Dupont',
-      role: 'EMPLOYER',
-      emailVerified: new Date(),
-      companyId: acme.id,
-    },
+  await prisma.user.createMany({
+    data: [
+      {
+        email: 'employer@acme-tech.example.com',
+        name: 'Marie Dupont',
+        role: 'EMPLOYER',
+        emailVerified: new Date(),
+        companyId: acme.id,
+      },
+      {
+        email: 'candidat@example.com',
+        name: 'Jean Martin',
+        role: 'CANDIDATE',
+        emailVerified: new Date(),
+      },
+      {
+        email: 'admin@ebarka-jobs.com',
+        name: 'Admin Ebarka',
+        role: 'ADMIN',
+        emailVerified: new Date(),
+      },
+    ],
   });
 
-  const candidateUser = await prisma.user.create({
-    data: {
-      email: 'candidat@example.com',
-      name: 'Jean Martin',
-      role: 'CANDIDATE',
-      emailVerified: new Date(),
-    },
-  });
-
-  const adminUser = await prisma.user.create({
-    data: {
-      email: 'admin@ebarka-jobs.com',
-      name: 'Admin Ebarka',
-      role: 'ADMIN',
-      emailVerified: new Date(),
-    },
-  });
-
-  console.log('👥 3 utilisateurs créés');
+  seedLogger.info('3 utilisateurs crees');
 
   // ── Offres d'emploi ────────────────────────────────────────────────────────
-  const jobsData = [
+  const jobsData: SeedJob[] = [
     // Acme Technologies
     {
       title: 'Développeur Full Stack Senior',
@@ -122,8 +133,8 @@ async function main() {
       type: 'FULL_TIME' as const,
       status: 'ACTIVE' as const,
       featured: true,
-      salaryMin: 55000,
-      salaryMax: 75000,
+      salaryMin: 55_000,
+      salaryMax: 75_000,
       salaryCurrency: 'EUR',
       salaryUnit: 'YEAR' as const,
       description: `## À propos du poste
@@ -153,7 +164,7 @@ Nous recherchons un(e) développeur(se) Full Stack Senior passionné(e) pour rej
       workplaceCountry: 'France',
       visaSponsorship: 'YES' as const,
       companyId: acme.id,
-      careerLevels: ['SENIOR'],
+      careerLevels: [CareerLevel.SENIOR],
       languages: ['fr', 'en'],
     },
     {
@@ -162,8 +173,8 @@ Nous recherchons un(e) développeur(se) Full Stack Senior passionné(e) pour rej
       type: 'FULL_TIME' as const,
       status: 'ACTIVE' as const,
       featured: false,
-      salaryMin: 45000,
-      salaryMax: 60000,
+      salaryMin: 45_000,
+      salaryMax: 60_000,
       salaryCurrency: 'EUR',
       salaryUnit: 'YEAR' as const,
       description: `## Le rôle
@@ -182,7 +193,7 @@ En tant que Product Designer chez Acme, vous serez au cœur de la création de l
       remoteRegion: 'EU Only',
       visaSponsorship: 'NO' as const,
       companyId: acme.id,
-      careerLevels: ['MID_LEVEL', 'SENIOR'],
+      careerLevels: [CareerLevel.MID_LEVEL, CareerLevel.SENIOR],
       languages: ['fr'],
     },
     {
@@ -191,8 +202,8 @@ En tant que Product Designer chez Acme, vous serez au cœur de la création de l
       type: 'FULL_TIME' as const,
       status: 'ACTIVE' as const,
       featured: false,
-      salaryMin: 50000,
-      salaryMax: 70000,
+      salaryMin: 50_000,
+      salaryMax: 70_000,
       salaryCurrency: 'EUR',
       salaryUnit: 'YEAR' as const,
       description: `## Mission
@@ -211,7 +222,7 @@ Vous rejoindrez l'équipe Infrastructure pour maintenir et améliorer notre pipe
       workplaceCountry: 'France',
       visaSponsorship: 'YES' as const,
       companyId: acme.id,
-      careerLevels: ['SENIOR', 'STAFF'],
+      careerLevels: [CareerLevel.SENIOR, CareerLevel.STAFF],
       languages: ['fr', 'en'],
     },
 
@@ -222,8 +233,8 @@ Vous rejoindrez l'équipe Infrastructure pour maintenir et améliorer notre pipe
       type: 'FULL_TIME' as const,
       status: 'ACTIVE' as const,
       featured: true,
-      salaryMin: 38000,
-      salaryMax: 50000,
+      salaryMin: 38_000,
+      salaryMax: 50_000,
       salaryCurrency: 'EUR',
       salaryUnit: 'YEAR' as const,
       description: `## Nova Digital recrute !
@@ -246,7 +257,7 @@ Vous travaillerez sur des projets variés : e-commerce, portails B2B, applicatio
       workplaceCountry: 'France',
       visaSponsorship: 'NO' as const,
       companyId: nova.id,
-      careerLevels: ['JUNIOR', 'MID_LEVEL'],
+      careerLevels: [CareerLevel.JUNIOR, CareerLevel.MID_LEVEL],
       languages: ['fr'],
     },
     {
@@ -255,8 +266,8 @@ Vous travaillerez sur des projets variés : e-commerce, portails B2B, applicatio
       type: 'FULL_TIME' as const,
       status: 'ACTIVE' as const,
       featured: false,
-      salaryMin: 40000,
-      salaryMax: 52000,
+      salaryMin: 40_000,
+      salaryMax: 52_000,
       salaryCurrency: 'EUR',
       salaryUnit: 'YEAR' as const,
       description: `## Le poste
@@ -276,7 +287,7 @@ Au sein de l'agence Nova Digital, vous piloterez des projets digitaux de A à Z,
       workplaceCountry: 'France',
       visaSponsorship: 'NO' as const,
       companyId: nova.id,
-      careerLevels: ['MID_LEVEL', 'SENIOR'],
+      careerLevels: [CareerLevel.MID_LEVEL, CareerLevel.SENIOR],
       languages: ['fr'],
     },
 
@@ -287,8 +298,8 @@ Au sein de l'agence Nova Digital, vous piloterez des projets digitaux de A à Z,
       type: 'FULL_TIME' as const,
       status: 'ACTIVE' as const,
       featured: true,
-      salaryMin: 60000,
-      salaryMax: 85000,
+      salaryMin: 60_000,
+      salaryMax: 85_000,
       salaryCurrency: 'EUR',
       salaryUnit: 'YEAR' as const,
       description: `## L'opportunité
@@ -314,7 +325,7 @@ Un environnement technique exigeant, une équipe de 8 ingénieurs data passionn�
       remoteRegion: 'Worldwide',
       visaSponsorship: 'YES' as const,
       companyId: dataflow.id,
-      careerLevels: ['SENIOR', 'STAFF'],
+      careerLevels: [CareerLevel.SENIOR, CareerLevel.STAFF],
       languages: ['fr', 'en'],
     },
     {
@@ -323,8 +334,8 @@ Un environnement technique exigeant, une équipe de 8 ingénieurs data passionn�
       type: 'FULL_TIME' as const,
       status: 'ACTIVE' as const,
       featured: false,
-      salaryMin: 65000,
-      salaryMax: 90000,
+      salaryMin: 65_000,
+      salaryMax: 90_000,
       salaryCurrency: 'EUR',
       salaryUnit: 'YEAR' as const,
       description: `## Mission
@@ -343,7 +354,7 @@ Vous développerez et déploierez des modèles de ML en production pour nos clie
       workplaceCountry: 'France',
       visaSponsorship: 'YES' as const,
       companyId: dataflow.id,
-      careerLevels: ['MID_LEVEL', 'SENIOR'],
+      careerLevels: [CareerLevel.MID_LEVEL, CareerLevel.SENIOR],
       languages: ['fr', 'en'],
     },
     {
@@ -378,28 +389,34 @@ Rejoignez l'équipe Core Platform de DataFlow AI pour un stage stimulant au cœu
       workplaceCountry: 'France',
       visaSponsorship: 'NO' as const,
       companyId: dataflow.id,
-      careerLevels: ['INTERNSHIP'],
+      careerLevels: [CareerLevel.INTERNSHIP],
       languages: ['fr'],
     },
   ];
 
-  for (const jobData of jobsData) {
-    const { careerLevels, languages, ...job } = jobData;
+  await Promise.all(
+    jobsData.map(async (jobData) => {
+      const { careerLevels, languages, ...job } = jobData;
 
-    await prisma.job.create({
-      data: {
-        ...job,
-        careerLevels: {
-          create: careerLevels.map((level) => ({ level: level as any })),
-        },
-        languages: {
-          create: languages.map((lang) => ({ language: lang })),
-        },
-      },
-    });
-  }
+      const createdJob = await prisma.job.create({ data: job });
 
-  console.log(`💼 ${jobsData.length} offres d'emploi créées`);
+      await prisma.jobCareerLevel.createMany({
+        data: careerLevels.map((level) => ({
+          jobId: createdJob.id,
+          level,
+        })),
+      });
+
+      await prisma.jobLanguage.createMany({
+        data: languages.map((language) => ({
+          jobId: createdJob.id,
+          language,
+        })),
+      });
+    })
+  );
+
+  seedLogger.info(`${jobsData.length} offres d'emploi creees`);
 
   // ── Alertes email ──────────────────────────────────────────────────────────
   await prisma.jobAlert.createMany({
@@ -423,7 +440,7 @@ Rejoignez l'équipe Core Platform de DataFlow AI pour un stage stimulant au cœu
     ],
   });
 
-  console.log('🔔 2 alertes email créées');
+  seedLogger.info('2 alertes email creees');
 
   // ── Résumé ─────────────────────────────────────────────────────────────────
   const counts = await Promise.all([
@@ -433,16 +450,17 @@ Rejoignez l'équipe Core Platform de DataFlow AI pour un stage stimulant au cœu
     prisma.jobAlert.count(),
   ]);
 
-  console.log('\n✅ Seed terminé avec succès !');
-  console.log(`   Entreprises  : ${counts[0]}`);
-  console.log(`   Utilisateurs : ${counts[1]}`);
-  console.log(`   Offres       : ${counts[2]}`);
-  console.log(`   Alertes      : ${counts[3]}`);
+  seedLogger.info('');
+  seedLogger.info('Seed termine avec succes !');
+  seedLogger.info(`Entreprises  : ${counts[0]}`);
+  seedLogger.info(`Utilisateurs : ${counts[1]}`);
+  seedLogger.info(`Offres       : ${counts[2]}`);
+  seedLogger.info(`Alertes      : ${counts[3]}`);
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Erreur seed :', e);
+    seedLogger.error('Erreur seed :', e);
     process.exit(1);
   })
   .finally(async () => {
