@@ -31,3 +31,10 @@ npm-debug.log*
 *.tsbuildinfo
 next-env.d.ts
 .gstack/
+
+# prisma
+prisma/migrations/dev.db
+prisma/migrations/dev.db-journal
+
+# docker (volumes Docker gérés par le daemon, pas de données locales)
+docker/pgadmin/*.db

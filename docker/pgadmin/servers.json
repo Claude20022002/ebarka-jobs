@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Ebarka Jobs (Local)",
+      "Group": "Docker",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "ebarka_jobs",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "PassFile": "/pgpass"
+    }
+  }
+}

@@ -3,13 +3,28 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "TURBOPACK=1 bun --bun next dev --turbopack",
+    "dev": "bun --bun next dev --turbopack",
     "build": "bun --bun next build",
     "start": "bun --bun next start",
     "lint": "bunx ultracite check",
-    "format": "bunx ultracite format"
+    "format": "bunx ultracite format",
+    "type-check": "tsc --noEmit",
+    "db:generate": "bunx prisma generate",
+    "db:migrate": "bunx prisma migrate dev",
+    "db:migrate:prod": "bunx prisma migrate deploy",
+    "db:push": "bunx prisma db push",
+    "db:studio": "bunx prisma studio",
+    "db:seed": "bun run prisma/seed.ts",
+    "db:reset": "bunx prisma migrate reset --force",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f postgres",
+    "docker:reset": "docker-compose down -v && docker-compose up -d",
+    "docker:status": "docker-compose ps",
+    "setup": "bun install && docker-compose up -d && bunx prisma migrate dev && bun run db:seed"
   },
   "dependencies": {
+    "@prisma/client": "^6.0.0",
     "@fontsource/ibm-plex-serif": "^5.2.6",
     "@fontsource/inter": "^5.2.6",
     "@radix-ui/react-accordion": "^1.2.12",
@@ -45,7 +60,11 @@
     "tailwindcss-animate": "^1.0.7",
     "unified": "^11.0.5"
   },
+  "prisma": {
+    "seed": "bun run prisma/seed.ts"
+  },
   "devDependencies": {
+    "prisma": "^6.0.0",
     "@biomejs/biome": "2.2.2",
     "@tailwindcss/forms": "^0.5.10",
     "@tailwindcss/typography": "^0.5.16",

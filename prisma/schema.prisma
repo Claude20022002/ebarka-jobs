@@ -1,0 +1,411 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── AUTH (NextAuth.js v5) ────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  role          UserRole  @default(EMPLOYER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  company       Company?      @relation(fields: [companyId], references: [id])
+  companyId     String?
+  savedJobs     SavedJob[]
+  applications  Application[]
+  documents     Document[]
+  aiGenerations AiGeneration[]
+
+  @@index([email])
+  @@index([companyId])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── ENTREPRISES ──────────────────────────────────────────────────────────────
+
+model Company {
+  id          String      @id @default(cuid())
+  name        String
+  slug        String      @unique
+  logo        String?
+  website     String?
+  description String?     @db.Text
+  industry    String?
+  size        CompanySize?
+  location    String?
+  verified    Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  users User[]
+  jobs  Job[]
+
+  @@index([slug])
+}
+
+// ─── OFFRES D'EMPLOI ──────────────────────────────────────────────────────────
+
+model Job {
+  id                      String        @id @default(cuid())
+  title                   String
+  slug                    String        @unique
+  type                    JobType
+  status                  JobStatus     @default(PENDING)
+  featured                Boolean       @default(false)
+
+  salaryMin               Float?
+  salaryMax               Float?
+  salaryCurrency          String        @default("EUR")
+  salaryUnit              SalaryUnit?
+
+  description             String        @db.Text
+  benefits                String?       @db.Text
+  applicationRequirements String?       @db.Text
+  skills                  String?       @db.Text
+  qualifications          String?       @db.Text
+  educationRequirements   String?       @db.Text
+  experienceRequirements  String?       @db.Text
+  responsibilities        String?       @db.Text
+
+  applyUrl                String?
+  applyInApp              Boolean       @default(false)
+
+  postedDate              DateTime      @default(now())
+  validThrough            DateTime?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  workplaceType           WorkplaceType @default(NOT_SPECIFIED)
+  remoteRegion            String?
+  timezoneRequirements    String?
+  workplaceCity           String?
+  workplaceCountry        String?
+
+  visaSponsorship         VisaStatus    @default(NOT_SPECIFIED)
+  occupationalCategory    String?
+  industry                String?
+  jobIdentifier           String?
+
+  viewCount               Int           @default(0)
+  clickCount              Int           @default(0)
+
+  company      Company          @relation(fields: [companyId], references: [id])
+  companyId    String
+  careerLevels JobCareerLevel[]
+  languages    JobLanguage[]
+  applications Application[]
+  savedBy      SavedJob[]
+  payment      Payment?
+
+  @@index([status, postedDate(sort: Desc)])
+  @@index([companyId])
+  @@index([workplaceType])
+  @@index([featured, status])
+  @@index([slug])
+}
+
+model JobCareerLevel {
+  id    String      @id @default(cuid())
+  jobId String
+  level CareerLevel
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, level])
+  @@index([jobId])
+}
+
+model JobLanguage {
+  id       String @id @default(cuid())
+  jobId    String
+  language String
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, language])
+  @@index([jobId])
+}
+
+// ─── CANDIDATURES ─────────────────────────────────────────────────────────────
+
+model Application {
+  id          String            @id @default(cuid())
+  status      ApplicationStatus @default(PENDING)
+  coverLetter String?           @db.Text
+  message     String?           @db.Text
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  job    Job  @relation(fields: [jobId], references: [id])
+  jobId  String
+  user   User @relation(fields: [userId], references: [id])
+  userId String
+
+  documents ApplicationDocument[]
+
+  @@unique([jobId, userId])
+  @@index([jobId])
+  @@index([userId])
+}
+
+model ApplicationDocument {
+  id            String @id @default(cuid())
+  applicationId String
+  documentId    String
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  document    Document    @relation(fields: [documentId], references: [id])
+
+  @@unique([applicationId, documentId])
+  @@index([applicationId])
+}
+
+// ─── DOCUMENTS (Cloudinary) ───────────────────────────────────────────────────
+
+model Document {
+  id           String   @id @default(cuid())
+  type         DocType
+  name         String
+  cloudinaryId String
+  url          String
+  size         Int?
+  mimeType     String?
+  aiGenerated  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  applications ApplicationDocument[]
+  aiGeneration AiGeneration?
+
+  @@index([userId])
+}
+
+// ─── OFFRES SAUVEGARDÉES ──────────────────────────────────────────────────────
+
+model SavedJob {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  job    Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId  String
+
+  @@unique([userId, jobId])
+  @@index([userId])
+}
+
+// ─── PAIEMENTS (Stripe) ───────────────────────────────────────────────────────
+
+model Payment {
+  id              String        @id @default(cuid())
+  stripeSessionId String        @unique
+  stripePaymentId String?
+  amount          Int
+  currency        String        @default("eur")
+  status          PaymentStatus @default(PENDING)
+  plan            JobPlan
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  job   Job    @relation(fields: [jobId], references: [id])
+  jobId String @unique
+
+  @@index([stripeSessionId])
+}
+
+// ─── ALERTES EMAIL ────────────────────────────────────────────────────────────
+
+model JobAlert {
+  id        String   @id @default(cuid())
+  email     String
+  name      String
+  active    Boolean  @default(true)
+  filters   Json?
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+// ─── GÉNÉRATION IA (Claude) ───────────────────────────────────────────────────
+
+model AiGeneration {
+  id         String    @id @default(cuid())
+  type       AiGenType
+  prompt     String    @db.Text
+  result     String    @db.Text
+  model      String    @default("claude-sonnet-4-6")
+  tokens     Int?
+  createdAt  DateTime  @default(now())
+
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId     String?
+  document   Document? @relation(fields: [documentId], references: [id])
+  documentId String?   @unique
+
+  @@index([userId])
+}
+
+// ─── ENUMS ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  EMPLOYER
+  CANDIDATE
+}
+
+enum CompanySize {
+  SOLO
+  STARTUP
+  SMALL
+  MEDIUM
+  LARGE
+  ENTERPRISE
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  FREELANCE
+  INTERNSHIP
+}
+
+enum SalaryUnit {
+  HOUR
+  DAY
+  WEEK
+  MONTH
+  YEAR
+  PROJECT
+}
+
+enum JobStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+  EXPIRED
+  REJECTED
+}
+
+enum WorkplaceType {
+  ON_SITE
+  HYBRID
+  REMOTE
+  NOT_SPECIFIED
+}
+
+enum VisaStatus {
+  YES
+  NO
+  NOT_SPECIFIED
+}
+
+enum CareerLevel {
+  INTERNSHIP
+  ENTRY_LEVEL
+  ASSOCIATE
+  JUNIOR
+  MID_LEVEL
+  SENIOR
+  STAFF
+  PRINCIPAL
+  LEAD
+  MANAGER
+  SENIOR_MANAGER
+  DIRECTOR
+  SENIOR_DIRECTOR
+  VP
+  SVP
+  EVP
+  C_LEVEL
+  NOT_SPECIFIED
+}
+
+enum ApplicationStatus {
+  PENDING
+  REVIEWING
+  INTERVIEW
+  OFFER
+  REJECTED
+  WITHDRAWN
+}
+
+enum DocType {
+  CV
+  COVER_LETTER
+  PORTFOLIO
+  CERTIFICATE
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum JobPlan {
+  STARTER
+  PRO
+  BUSINESS
+}
+
+enum AiGenType {
+  CV
+  COVER_LETTER
+  JOB_DESCRIPTION
+}
