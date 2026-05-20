@@ -237,7 +237,7 @@ export function normalizeMarkdown(raw: string): string {
               hasBoldHeader: false,
               markerStyle,
             });
-          } else if (indentation > listStack.at(-1).indent) {
+          } else if (indentation > (listStack.at(-1)?.indent ?? 0)) {
             // This is a nested list
             listStack.push({
               indent: indentation,
@@ -250,7 +250,7 @@ export function normalizeMarkdown(raw: string): string {
             // Pop items from stack until we find the appropriate level
             while (
               listStack.length > 0 &&
-              indentation <= listStack.at(-1).indent
+              indentation <= (listStack.at(-1)?.indent ?? 0)
             ) {
               listStack.pop();
             }
@@ -305,7 +305,7 @@ export function normalizeMarkdown(raw: string): string {
               hasBoldHeader,
               markerStyle,
             });
-          } else if (indentation > listStack.at(-1).indent) {
+          } else if (indentation > (listStack.at(-1)?.indent ?? 0)) {
             // This is a nested list
             listStack.push({
               indent: indentation,
@@ -318,7 +318,7 @@ export function normalizeMarkdown(raw: string): string {
             // Pop items from stack until we find the appropriate level
             while (
               listStack.length > 0 &&
-              indentation <= listStack.at(-1).indent
+              indentation <= (listStack.at(-1)?.indent ?? 0)
             ) {
               listStack.pop();
             }
@@ -376,7 +376,7 @@ export function normalizeMarkdown(raw: string): string {
               hasBoldHeader,
               markerStyle,
             });
-          } else if (indentation > listStack.at(-1).indent) {
+          } else if (indentation > (listStack.at(-1)?.indent ?? 0)) {
             // This is a nested list
             listStack.push({
               indent: indentation,
@@ -389,7 +389,7 @@ export function normalizeMarkdown(raw: string): string {
             // Pop items from stack until we find the appropriate level
             while (
               listStack.length > 0 &&
-              indentation <= listStack.at(-1).indent
+              indentation <= (listStack.at(-1)?.indent ?? 0)
             ) {
               listStack.pop();
             }
@@ -428,7 +428,7 @@ export function normalizeMarkdown(raw: string): string {
           hasBoldHeader,
           markerStyle,
         });
-      } else if (indentation > listStack.at(-1).indent) {
+      } else if (indentation > (listStack.at(-1)?.indent ?? 0)) {
         // This is a nested list
         listStack.push({
           indent: indentation,
@@ -439,7 +439,7 @@ export function normalizeMarkdown(raw: string): string {
         });
       } else {
         // Pop items from stack until we find the appropriate level
-        while (listStack.length > 0 && indentation <= listStack.at(-1).indent) {
+        while (listStack.length > 0 && indentation <= (listStack.at(-1)?.indent ?? 0)) {
           listStack.pop();
         }
         listStack.push({
@@ -507,7 +507,7 @@ export function normalizeMarkdown(raw: string): string {
           continue;
         }
 
-        if (indentation >= lastItem.indent) {
+        if (lastItem !== undefined && indentation >= lastItem.indent) {
           // This is content at the same or greater indentation level as the list item
           const listIndent = '  '.repeat(listStack.length - 1);
           const contentIndent = '  '; // Standard markdown indentation for content

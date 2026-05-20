@@ -52,10 +52,9 @@ export async function generateRSSFeed(options: RSSFeedOptions): Promise<Feed> {
         author: [
           {
             name: job.company,
-            link: job.companyWebsite || undefined,
           },
         ],
-        date: new Date(job.createdTime || Date.now()),
+        date: new Date(job.posted_date || Date.now()),
         category: job.type ? [{ name: job.type }] : undefined,
       });
     }

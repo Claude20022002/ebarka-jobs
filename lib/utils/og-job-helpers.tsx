@@ -38,9 +38,8 @@ export function createJobOGConfig(job: MinimalJob): JobProcessedOGConfig {
         : 0.8,
     backgroundImage: ogJobConfig.backgroundImage || null,
     titleColor: ogJobConfig.titleColor || config.ui.heroTitleColor || '#FFFFFF',
-    descriptionColor:
-      ogJobConfig.descriptionColor || config.ui.heroSubtitleColor || '#FFFFFF',
-    gradientEnabled: ogJobConfig.gradient?.enabled !== false,
+    descriptionColor: config.ui.heroSubtitleColor || '#FFFFFF',
+    gradientEnabled: (ogJobConfig.gradient?.enabled as boolean | undefined) !== false,
     gradientColor:
       ogJobConfig.gradient?.color ||
       ogJobConfig.backgroundColor || config.ui.heroBackgroundColor ||

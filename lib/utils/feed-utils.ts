@@ -21,8 +21,8 @@ export type JobItem = {
   company: string;
   type: string;
   workplace_type: string;
-  workplace_city?: string;
-  workplace_country?: string;
+  workplace_city?: string | null;
+  workplace_country?: string | null;
   salary?: Salary | null;
   posted_date?: string;
   description: string;
