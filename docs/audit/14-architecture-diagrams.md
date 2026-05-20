@@ -1,378 +1,344 @@
-# Diagrammes d'Architecture
+# Diagrammes d'Architecture — Stack cible
 
-## 1. Architecture Actuelle
-
-### 1.1 Vue d'ensemble système
+## 1. Architecture système complète
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                        UTILISATEUR FINAL                                │
-│                    Navigateur Web / RSS Reader                          │
-└─────────────────────────┬───────────────────────────────────────────────┘
-                          │ HTTPS
-                          ▼
+│                           UTILISATEURS                                  │
+├──────────────────┬─────────────────────┬────────────────────────────────┤
+│  Visiteurs       │  Candidats          │  Employeurs / Admins           │
+│  (anonymes)      │  (NextAuth session) │  (NextAuth session + role)     │
+└────────┬─────────┴──────────┬──────────┴──────────────┬─────────────────┘
+         │                    │                          │
+         └────────────────────┼──────────────────────────┘
+                              │ HTTPS
+                              ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                     CDN EDGE (Vercel/Cloudflare)                        │
-│              Pages statiques pré-générées (HTML/CSS/JS)                │
-│              Cache TTL: 5 minutes (ISR revalidation)                   │
-└────────┬────────────────────────────────────────────┬───────────────────┘
-         │ Miss cache / API routes                    │ Hit cache
-         ▼                                            ▼
-┌────────────────────────┐                ┌─────────────────────────────┐
-│   NEXT.JS SERVER       │                │     HTML STATIQUE SERVÉ     │
-│   (Serverless/Node.js) │                │     depuis le CDN           │
-│                        │                └─────────────────────────────┘
-│  ┌──────────────────┐  │
-│  │  App Router SSG  │  │   ISR Revalidation (5min)
-│  │  - / (homepage)  │◄─┼───────────────────────────────┐
-│  │  - /jobs/[slug]  │  │                               │
-│  │  - /jobs/type/.. │  │                               │
-│  └────────┬─────────┘  │                               │
-│           │             │                               │
-│  ┌────────▼─────────┐  │                   ┌───────────▼───────────┐
-│  │   API Routes     │  │                   │      AIRTABLE API     │
-│  │ /api/subscribe   │  │                   │   REST API (HTTPS)    │
-│  │ /api/og          │  │                   │   Bearer Token Auth   │
-│  │ /feed.xml        │  │──────────────────►│   Table: Jobs         │
-│  │ /sitemap.xml     │  │                   │   ~100-5000 records   │
-│  └────────┬─────────┘  │                   └───────────────────────┘
-└───────────┼────────────┘
-            │ (subscribe uniquement)
-            ▼
-┌─────────────────────────┐
-│   ENCHARGE EMAIL API    │
-│   (Newsletter/Alerts)   │
-└─────────────────────────┘
+│               VERCEL — CDN EDGE + SERVERLESS                           │
+│                                                                         │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │  NEXT.JS 15 — APP ROUTER                                         │  │
+│  │                                                                   │  │
+│  │  Pages publiques (SSG/ISR)     Pages protégées (SSR + Auth)      │  │
+│  │  ─────────────────────────     ──────────────────────────────    │  │
+│  │  /                             /dashboard/* (employeur)          │  │
+│  │  /jobs/[slug]                  /profile/* (candidat)             │  │
+│  │  /jobs/type/[type]             /auth/login                       │  │
+│  │  /about, /faq, /pricing        /auth/error                       │  │
+│  │                                                                   │  │
+│  │  API Routes (Serverless)       Edge Routes                        │  │
+│  │  ────────────────────────      ─────────────                     │  │
+│  │  /api/auth/[...nextauth]       /api/og/*                         │  │
+│  │  /api/v1/jobs (CRUD)           middleware.ts (auth guard)        │  │
+│  │  /api/v1/documents/upload                                         │  │
+│  │  /api/ai/generate-*                                               │  │
+│  │  /api/webhooks/stripe                                             │  │
+│  │  /feed.xml, /sitemap.xml                                          │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────┬─────────────────────────────────────────┘
+                                │
+          ┌─────────────────────┼──────────────────────┐
+          │                     │                      │
+          ▼                     ▼                      ▼
+┌──────────────────┐  ┌──────────────────┐  ┌──────────────────────────┐
+│  SUPABASE        │  │  UPSTASH REDIS   │  │  SERVICES EXTERNES       │
+│  PostgreSQL      │  │  Rate limiting   │  │                          │
+│                  │  │  Sessions cache  │  │  Anthropic Claude API    │
+│  - jobs          │  └──────────────────┘  │  (génération CV/LM)      │
+│  - companies     │                        │                          │
+│  - users         │  ┌──────────────────┐  │  Cloudinary CDN          │
+│  - applications  │  │  SENTRY          │  │  (fichiers PDF/images)   │
+│  - documents     │  │  Error tracking  │  │                          │
+│  - payments      │  │  Performance     │  │  Resend                  │
+│  - ai_generations│  └──────────────────┘  │  (emails transactionnels)│
+│                  │                        │                          │
+│  RLS activé      │  ┌──────────────────┐  │  Stripe                  │
+│  Backups auto    │  │  VERCEL ANALYTICS│  │  (paiements Phase 2)     │
+└──────────────────┘  │  Core Web Vitals │  └──────────────────────────┘
+                      └──────────────────┘
 ```
 
 ---
 
-### 1.2 Flux de données détaillé
+## 2. Flux d'authentification (NextAuth v5)
 
 ```
-╔══════════════════════════════════════════════════════════════════╗
-║                      BUILD TIME (SSG)                           ║
-╠══════════════════════════════════════════════════════════════════╣
-║                                                                  ║
-║  Airtable API ──► getJobs() ──► generateStaticParams()          ║
-║                      │                    │                     ║
-║                  React.cache()    Routes générées :             ║
-║                  (déduplication)  /jobs/react-dev-at-acme       ║
-║                                   /jobs/backend-at-corp         ║
-║                                   ...                           ║
-╚══════════════════════════════════════════════════════════════════╝
-
-╔══════════════════════════════════════════════════════════════════╗
-║                    RUNTIME (Client Browser)                     ║
-╠══════════════════════════════════════════════════════════════════╣
-║                                                                  ║
-║  HTML pré-rendu ──► Hydration React 19 ──► Client State         ║
-║                                                │                 ║
-║                                    ┌───────────▼────────────┐   ║
-║                                    │   URL State (nuqs)     │   ║
-║                                    │   ?q=&page=&sort=...   │   ║
-║                                    └───────────┬────────────┘   ║
-║                                                │                 ║
-║                            ┌───────────────────▼──────────────┐ ║
-║                            │  Filter en mémoire (client-side) │ ║
-║                            │  filterJobsBySearch()            │ ║
-║                            │  filterJobsByType()              │ ║
-║                            │  sortJobs()                      │ ║
-║                            │  paginateJobs()                  │ ║
-║                            └───────────────────┬──────────────┘ ║
-║                                                │                 ║
-║                                    ┌───────────▼────────────┐   ║
-║                                    │   Rendu des résultats  │   ║
-║                                    │   <JobListings />      │   ║
-║                                    └────────────────────────┘   ║
-╚══════════════════════════════════════════════════════════════════╝
-
-╔══════════════════════════════════════════════════════════════════╗
-║                    REVALIDATION (ISR)                           ║
-╠══════════════════════════════════════════════════════════════════╣
-║                                                                  ║
-║  Timer 5min ──► Next.js revalidation ──► Airtable API          ║
-║                         │                     │                  ║
-║                  Pages régénérées       Nouvelles offres        ║
-║                  en arrière-plan        récupérées              ║
-║                         │                                        ║
-║                  CDN mis à jour ──► Utilisateurs voient         ║
-║                                     les nouvelles offres        ║
-╚══════════════════════════════════════════════════════════════════╝
+┌──────────────┐
+│  Utilisateur │
+│  clique      │
+│  "Connexion" │
+└──────┬───────┘
+       │
+       ▼
+┌──────────────────────────────────────────┐
+│  /auth/login                             │
+│  (page Next.js)                          │
+│                                          │
+│  [Se connecter avec Google]              │
+│  [Connexion par email (magic link)]      │
+└──────┬───────────────────────────────────┘
+       │ OAuth redirect / email envoyé via Resend
+       ▼
+┌──────────────────────────────────────────┐
+│  /api/auth/[...nextauth]                 │
+│  NextAuth.js v5 handler                  │
+│                                          │
+│  PrismaAdapter → upsert User en BDD      │
+│  JWT créé avec { id, role, companyId }   │
+└──────┬───────────────────────────────────┘
+       │ Cookie httpOnly (session JWT)
+       ▼
+┌──────────────────────────────────────────┐
+│  middleware.ts (Edge)                    │
+│                                          │
+│  /dashboard/* → vérifie session          │
+│    → role EMPLOYER requis                │
+│  /api/v1/* (POST/PUT/DELETE)             │
+│    → session requise                     │
+│  /api/ai/* → session requise             │
+└──────┬───────────────────────────────────┘
+       │
+       ▼
+┌──────────────────────────────────────────┐
+│  Page/API protégée accessible            │
+│  session.user = { id, role, companyId }  │
+└──────────────────────────────────────────┘
 ```
 
 ---
 
-### 1.3 Arbre de composants (page d'accueil)
+## 3. Flux génération IA (Claude API)
 
 ```
-app/page.tsx (Server Component)
-└── <HomePage jobs={jobs} config={config} />  (Client Component)
-    ├── <HeroSection />
-    │   └── Badge, Title, Description
-    │
-    ├── <JobSearchInput />  ──── useJobSearch() ──── URL: ?q=
-    │
-    ├── <JobFilters />  ──────── useState local ───── URL: ?types=&roles=...
-    │   ├── Type checkboxes
-    │   ├── Career level checkboxes
-    │   ├── Remote switch
-    │   ├── Salary range select
-    │   ├── Visa switch
-    │   └── Languages select
-    │
-    ├── <SortOrderSelect />  ─── useSortOrder() ───── URL: ?sort=
-    ├── <JobsPerPageSelect /> ── useJobsPerPage() ──── URL: ?per_page=
-    │
-    ├── [Filtering logic: useMemo]
-    │   filterJobsBySearch() → filterJobsByType() → ... → sortJobs()
-    │
-    ├── <JobListings filteredJobs={...} />
-    │   ├── <JobCard job={job} />  (× n)
-    │   │   ├── Company Avatar
-    │   │   ├── Job Title
-    │   │   ├── Company Name
-    │   │   ├── <JobBadge type={type} />
-    │   │   ├── Salary display
-    │   │   ├── Location badges
-    │   │   └── Posted date
-    │   └── <PostJobBanner />  (inséré toutes les N offres)
-    │
-    └── <PaginationControl />  ── usePagination() ─── URL: ?page=
-```
-
----
-
-### 1.4 Flux d'abonnement email
-
-```
-┌──────────────────┐
-│  /job-alerts     │
-│  (page)          │
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────────────────────┐
-│  <JobAlertsForm />               │
-│  (Client Component)              │
-│  - useState: name, email, loading│
-│  - useToast() pour notifications  │
-└────────┬─────────────────────────┘
-         │ POST { name, email }
-         ▼
-┌──────────────────────────────────┐
-│  /api/subscribe                  │
-│  (Route Handler - Node.js)       │
-│                                  │
-│  1. Check jobAlerts.enabled      │
-│  2. Extract IP                   │
-│  3. Rate limit check (Map)       │
-│  4. Validate email (regex)       │
-│  5. Validate name (non-empty)    │
-│  6. emailProvider.subscribe()    │
-└────────┬─────────────────────────┘
-         │ HTTP POST
-         ▼
-┌──────────────────────────────────┐
-│  Encharge API                    │
-│  POST https://ingest.encharge.io │
-│  /v1/{ENCHARGE_WRITE_KEY}        │
-│                                  │
-│  Payload:                        │
-│  { event, user: { email, name }, │
-│    properties: { source, ip } }  │
-└──────────────────────────────────┘
-```
-
----
-
-## 2. Architecture Cible (SaaS)
-
-### 2.1 Vision architecture SaaS complète
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    UTILISATEURS                                      │
-├──────────────────┬──────────────────┬───────────────────────────────┤
-│   Visiteurs      │   Candidats      │   Employeurs / Admins         │
-│   (anonymes)     │   (authentifiés) │   (authentifiés)              │
-└────────┬─────────┴────────┬─────────┴───────────────┬───────────────┘
-         │                  │                          │
-         ▼                  ▼                          ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                   NEXT.JS APP (Vercel)                              │
-│                                                                      │
-│  ┌─────────────────┐  ┌──────────────────┐  ┌───────────────────┐  │
-│  │  Pages publiques│  │  Pages candidat  │  │  Dashboard admin  │  │
-│  │  (SSG/ISR)      │  │  (SSR/Auth)      │  │  (SSR/Auth)       │  │
-│  │  /              │  │  /profile        │  │  /dashboard/jobs  │  │
-│  │  /jobs/...      │  │  /saved-jobs     │  │  /dashboard/new   │  │
-│  │  /about         │  │  /applications   │  │  /dashboard/pay   │  │
-│  └─────────────────┘  └──────────────────┘  └───────────────────┘  │
-│                                                                      │
-│  ┌────────────────────────────────────────────────────────────────┐  │
-│  │                      API Routes                               │  │
-│  │  /api/v1/jobs (CRUD)     /api/auth/[...nextauth]             │  │
-│  │  /api/v1/employers       /api/webhooks/stripe                │  │
-│  │  /api/subscribe          /api/og/...                         │  │
-│  │  /feed.xml               /sitemap.xml                        │  │
-│  └────────────────────────────────────────────────────────────────┘  │
-└──────────────────────────┬──────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│  Candidat connecté sur /profile/documents/generate  │
+└──────────────────────────┬──────────────────────────┘
                            │
-        ┌──────────────────┼──────────────────┐
-        │                  │                  │
-        ▼                  ▼                  ▼
-┌───────────────┐  ┌───────────────┐  ┌───────────────┐
-│  PostgreSQL   │  │  Upstash Redis│  │  Stripe       │
-│  (Neon/Supa)  │  │  (Rate limit, │  │  (Paiements,  │
-│               │  │   Sessions)   │  │   Webhooks)   │
-│  - Jobs       │  └───────────────┘  └───────────────┘
-│  - Companies  │
-│  - Users      │  ┌───────────────┐  ┌───────────────┐
-│  - Sessions   │  │  Encharge /   │  │  Sentry       │
-│  - Payments   │  │  Brevo Email  │  │  (Monitoring) │
-└───────────────┘  └───────────────┘  └───────────────┘
+          ┌────────────────┴────────────────┐
+          │                                 │
+          ▼                                 ▼
+┌──────────────────────┐         ┌──────────────────────┐
+│  Génération LM       │         │  Structuration CV     │
+│                      │         │                      │
+│  Input:              │         │  Input:               │
+│  - jobId             │         │  - Texte brut         │
+│  - cvText            │         │    (copié/collé)      │
+│  - language          │         │                      │
+└──────────┬───────────┘         └──────────┬───────────┘
+           │                                │
+           └──────────────┬─────────────────┘
+                          │ POST /api/ai/generate-*
+                          │ (Auth + Rate limit Upstash)
+                          ▼
+           ┌──────────────────────────────────┐
+           │  Vérification session NextAuth   │
+           │  Rate limit: 10 req/jour/user    │
+           └──────────────┬───────────────────┘
+                          │
+                          ▼
+           ┌──────────────────────────────────┐
+           │  Anthropic Claude API            │
+           │  Model: claude-sonnet-4-6        │
+           │  Max tokens: 1500                │
+           │  Prompt structuré FR/EN          │
+           └──────────────┬───────────────────┘
+                          │ Texte généré
+                          ▼
+           ┌──────────────────────────────────┐
+           │  Sauvegarde AiGeneration (BDD)   │
+           │  { type, tokens, userId, result }│
+           └──────────────┬───────────────────┘
+                          │
+                          ▼
+           ┌──────────────────────────────────┐
+           │  Affichage résultat              │
+           │  + Éditeur rich text             │
+           │  + Bouton "Sauvegarder comme PDF"│
+           └──────────────┬───────────────────┘
+                          │ POST /api/v1/documents/upload
+                          ▼
+           ┌──────────────────────────────────┐
+           │  Cloudinary → PDF stocké         │
+           │  Document créé en BDD            │
+           │  → Disponible pour candidatures  │
+           └──────────────────────────────────┘
 ```
 
 ---
 
-### 2.2 Flux d'authentification cible (NextAuth v5)
+## 4. Flux upload fichier (Cloudinary)
 
 ```
-Employeur clique "Se connecter"
+┌──────────────────────────────────────────────────────────────┐
+│  Client: <input type="file"> + next-cloudinary               │
+└─────────────────────────────┬────────────────────────────────┘
+                              │ File sélectionné
+                              ▼
+┌──────────────────────────────────────────────────────────────┐
+│  Validation client-side                                      │
+│  - Type: PDF / JPG / PNG                                     │
+│  - Taille: max 10MB                                          │
+└─────────────────────────────┬────────────────────────────────┘
+                              │ POST /api/v1/documents/upload
+                              │ multipart/form-data
+                              ▼
+┌──────────────────────────────────────────────────────────────┐
+│  API Route (Node.js)                                         │
+│  - Vérif session NextAuth                                    │
+│  - Validation serveur (type + taille)                        │
+│  - Upload via cloudinary.uploader.upload_stream()            │
+└─────────────────────────────┬────────────────────────────────┘
+                              │
+                              ▼
+┌──────────────────────────────────────────────────────────────┐
+│  Cloudinary                                                  │
+│  Dossier: ebarka-jobs/{userId}/documents                     │
+│  Retourne: { public_id, secure_url, format, bytes }          │
+└─────────────────────────────┬────────────────────────────────┘
+                              │
+                              ▼
+┌──────────────────────────────────────────────────────────────┐
+│  Prisma: Document.create({ cloudinaryId, url, userId, ... }) │
+│  Retourne: { id, url, name, type }                           │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 5. Flux soumission d'offre + paiement
+
+```
+Employeur connecté (/dashboard)
          │
          ▼
-┌─────────────────────┐
-│  /login             │
-│  (Page NextAuth)    │
-└────────┬────────────┘
-         │ Google OAuth / Email Magic Link
-         ▼
-┌─────────────────────┐
-│  NextAuth Handler   │
-│  /api/auth/callback │
-└────────┬────────────┘
-         │ JWT + Session
-         ▼
-┌─────────────────────┐      ┌──────────────────────┐
-│  Session Cookie     │─────►│  Middleware Auth      │
-│  (httpOnly, secure) │      │  middleware.ts        │
-└─────────────────────┘      │  - Protège /dashboard │
-                             │  - Redirige si non-auth│
-                             └──────────────────────┘
-```
-
----
-
-### 2.3 Flux de soumission d'offre (cible)
-
-```
-Employeur connecté
-│
-▼
 /dashboard/jobs/new
-│
-▼
-<JobSubmissionForm />
-  - Titre, description, type, salaire
-  - Localisation, langues, niveaux
-  - URL de candidature
-│
-▼ POST /api/v1/jobs
-│
-▼
-Validation Zod (server-side)
-│
-├── Échec → 422 + erreurs
-│
-└── Succès
-    │
-    ▼
-    Vérification plan Stripe
-    ├── Plan gratuit → offre en file d'attente
-    └── Plan payant → offre activée immédiatement
-        │
-        ▼
-        Prisma: INSERT INTO jobs (...)
-        │
-        ▼
-        Revalidation ISR: revalidatePath('/jobs')
-        │
-        ▼
-        Email confirmation employeur
-        │
-        ▼
-        Redirect → /dashboard/jobs (liste)
+Formulaire (Zod validé)
+         │ POST /api/v1/jobs
+         ▼
+Création Job { status: PENDING }
+         │
+         ▼
+┌────────────────────┐
+│ Plan Starter ?     │─── OUI ──► Job { status: ACTIVE }
+│ (1 offre gratuite) │           Email confirmation (Resend)
+└────────┬───────────┘
+         │ NON (plan Pro/Business)
+         ▼
+POST /api/checkout
+Stripe Checkout Session
+{ jobId, plan, amount }
+         │
+         ▼
+Redirect → Stripe Payment Page
+         │ Paiement effectué
+         ▼
+Stripe → POST /api/webhooks/stripe
+{ event: checkout.session.completed }
+         │
+         ▼
+Job { status: ACTIVE }
+Payment { status: PAID }
+Email confirmation (Resend)
+         │
+         ▼
+Redirect → /dashboard/jobs (offre visible)
 ```
 
 ---
 
-## 3. Schéma de base de données cible (ERD)
+## 6. Schéma ERD simplifié (PostgreSQL)
 
 ```
-┌──────────────┐       ┌──────────────────┐       ┌──────────────┐
-│   Company    │       │      Job         │       │    User      │
-├──────────────┤       ├──────────────────┤       ├──────────────┤
-│ id (cuid)    │◄──────│ companyId        │       │ id (cuid)    │
-│ name         │       │ id (cuid)        │       │ email        │
-│ slug         │       │ title            │       │ name         │
-│ logo         │       │ slug             │       │ role         │
-│ website      │       │ type (enum)      │       │ companyId    │─┐
-│ description  │       │ status (enum)    │       │ emailVerified│ │
-│ createdAt    │       │ salaryMin        │       │ image        │ │
-└──────────────┘       │ salaryMax        │       └──────────────┘ │
-       ▲               │ salaryCurrency   │                        │
-       └───────────────│ salaryUnit       │◄───────────────────────┘
-                       │ description      │
-                       │ applyUrl         │       ┌──────────────┐
-                       │ postedDate       │       │JobCareerLevel│
-                       │ validThrough     │       ├──────────────┤
-                       │ featured         │◄──────│ jobId        │
-                       │ workplaceType    │       │ level (enum) │
-                       │ remoteRegion     │       └──────────────┘
-                       │ workplaceCity    │
-                       │ workplaceCountry │       ┌──────────────┐
-                       │ visaSponsorship  │       │ JobLanguage  │
-                       │ createdAt        │       ├──────────────┤
-                       │ updatedAt        │◄──────│ jobId        │
-                       └──────────────────┘       │ language     │
-                                                  └──────────────┘
-
-┌──────────────────────────────────────────────┐
-│               Payment                        │
-├──────────────────────────────────────────────┤
-│ id            stripeSessionId                │
-│ userId        stripeCustomerId               │
-│ jobId         amount                         │
-│ plan          status (pending/paid/failed)   │
-│ createdAt                                    │
-└──────────────────────────────────────────────┘
+User ─────────────────── Company
+ │                          │
+ │ role: EMPLOYER           │ has many Jobs
+ │                          │
+ ├── SavedJob ──────────── Job
+ │                          │
+ ├── Application ─────────► │ has many Applications
+ │      │                   │ has one Payment
+ │      └── ApplicationDoc  │ has many CareerLevels
+ │                          │ has many Languages
+ └── Document               │
+      │                     │
+      └── AiGeneration      │
+           (Claude output)  │
+                            │
+                          Payment
+                          (Stripe)
 ```
 
 ---
 
-## 4. Architecture des microservices (vision 12+ mois)
+## 7. Structure des dossiers cible
 
 ```
-Si trafic > 1M offres / 100k utilisateurs simultanés :
-
-                    API Gateway (Vercel Edge)
-                    /jobs → Job Service
-                    /auth → Auth Service
-                    /payments → Payment Service
-                    /feeds → Feed Service
-                    /emails → Email Service
-
-Job Service ────────► PostgreSQL (Primary)
-                          │
-                     PostgreSQL (Read Replica × 2)
-                     (pour les requêtes de lecture)
-
-Feed Service ──────► Redis Cache
-                     (feeds générés en cache Redis, TTL 5min)
-
-Email Service ─────► Queue (Upstash QStash)
-                     (envoi asynchrone)
+ebarka-jobs/
+├── app/
+│   ├── (public)/                    # Route group — pages publiques
+│   │   ├── layout.tsx               # Nav + Footer
+│   │   ├── page.tsx                 # Homepage
+│   │   ├── jobs/[slug]/page.tsx
+│   │   ├── about/page.tsx
+│   │   └── ...
+│   ├── (dashboard)/                 # Route group — employeur (auth requis)
+│   │   ├── layout.tsx               # Nav admin + auth guard
+│   │   └── dashboard/
+│   │       ├── page.tsx
+│   │       ├── jobs/
+│   │       └── company/
+│   ├── (candidate)/                 # Route group — candidat (auth requis)
+│   │   ├── layout.tsx
+│   │   └── profile/
+│   │       ├── page.tsx
+│   │       ├── documents/
+│   │       └── applications/
+│   ├── auth/                        # Pages NextAuth
+│   │   ├── login/page.tsx
+│   │   └── error/page.tsx
+│   └── api/
+│       ├── auth/[...nextauth]/
+│       ├── v1/                      # API REST versionnée
+│       │   ├── jobs/
+│       │   ├── documents/
+│       │   └── alerts/
+│       ├── ai/                      # Routes Claude API
+│       │   ├── generate-cv/
+│       │   └── generate-cover-letter/
+│       ├── webhooks/
+│       │   └── stripe/
+│       └── og/                      # Edge runtime (inchangé)
+│
+├── components/
+│   ├── ui/                          # shadcn primitives
+│   ├── layout/                      # Nav, Footer
+│   ├── shared/                      # Hero, Pagination, Breadcrumb
+│   ├── jobs/                        # JobCard, JobFilters
+│   ├── dashboard/                   # Composants employeur
+│   ├── candidate/                   # Composants candidat
+│   └── ai/                          # Composants génération IA
+│
+├── emails/                          # Templates React Email
+│   ├── job-alert.tsx
+│   ├── welcome.tsx
+│   └── ...
+│
+├── lib/
+│   ├── db/
+│   │   ├── prisma.ts
+│   │   └── queries/
+│   ├── auth/config.ts               # NextAuth config
+│   ├── ai/claude.ts                 # Anthropic SDK helpers
+│   ├── upload/cloudinary.ts         # Cloudinary helpers
+│   ├── email/resend.ts              # Resend helpers
+│   ├── rate-limit.ts                # Upstash rate limiter
+│   ├── validations/                 # Schémas Zod
+│   ├── hooks/                       # React hooks (nuqs, etc.)
+│   └── utils/                       # Utilitaires purs
+│
+├── prisma/
+│   ├── schema.prisma
+│   └── seed.ts
+│
+└── middleware.ts                    # Auth guard NextAuth
 ```
-
-**Note :** Cette architecture n'est pas nécessaire avant d'atteindre 100k utilisateurs/mois. Rester simple (monolithe Next.js) jusqu'à ce que la charge le justifie.

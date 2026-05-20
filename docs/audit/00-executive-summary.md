@@ -3,7 +3,27 @@
 **Projet :** Ebarka-Jobs (basé sur Bordful v0.1.0)
 **Date d'audit :** 20 mai 2026
 **Auditeur :** Architecte Senior Next.js
-**Stack :** Next.js 15.5 · React 19 · TypeScript 5.9 · Airtable · Tailwind CSS 3.4
+
+## Stack technologique cible (décision validée)
+
+| Couche | Technologie | Rôle |
+|--------|-------------|------|
+| Frontend | Next.js 14 App Router | SSR/SSG, SEO, routing |
+| Styling | Tailwind CSS + shadcn/ui | Design system cohérent |
+| Backend | Next.js API Routes | API REST sécurisée |
+| Base de données | PostgreSQL + Prisma ORM | Typage fort, migrations |
+| Auth | NextAuth.js v5 + JWT | Sessions sécurisées |
+| IA / LLM | Claude API (Anthropic) | Génération CV & lettres |
+| Fichiers | Cloudinary | Upload PDF, images |
+| Emails | Resend + React Email | Templates HTML modernes |
+| Hébergement | Vercel + Supabase | Scalabilité, backups auto |
+| Monitoring | Sentry + Vercel Analytics | Erreurs & performance |
+
+> **Note :** Le codebase actuel utilise Next.js **15.5**. La spec cible est Next.js **14**. Les deux utilisent l'App Router — migrer vers 14 est régressif. Recommandation : rester sur **Next.js 15** qui est stable et supérieur. À confirmer avec l'équipe.
+
+---
+
+**Stack actuelle (codebase hérité) :** Next.js 15.5 · React 19 · TypeScript 5.9 · Airtable · Tailwind CSS 3.4
 
 ---
 

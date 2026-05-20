@@ -1,213 +1,204 @@
-# Cartographie des Fonctionnalités
+# Cartographie des Fonctionnalités — Stack cible
 
-## 1. Fonctionnalités existantes
+## 1. Fonctionnalités existantes (codebase actuel)
 
-### 1.1 Découverte d'emplois
+### Découverte d'emplois
 
-| Fonctionnalité | Statut | Page(s) | Qualité |
-|---------------|--------|---------|---------|
-| Liste des offres | ✅ Implémenté | `/` | Bonne |
-| Recherche textuelle | ✅ Implémenté | `/` | Bonne (debounce) |
-| Filtre par type d'emploi | ✅ Implémenté | `/` | Bonne |
-| Filtre par niveau de carrière | ✅ Implémenté | `/` | Bonne |
-| Filtre remote/présentiel | ✅ Implémenté | `/` | Bonne |
-| Filtre par fourchette salariale | ✅ Implémenté | `/` | Partielle |
-| Filtre par visa sponsorship | ✅ Implémenté | `/` | Bonne |
-| Filtre par langue | ✅ Implémenté | `/` | Bonne |
-| Tri (récent/ancien/salaire) | ✅ Implémenté | `/` | Bonne |
-| Pagination | ✅ Implémenté | `/` | Bonne |
-| Résultats par page (5-100) | ✅ Implémenté | `/` | Bonne |
-| Page de détail d'une offre | ✅ Implémenté | `/jobs/[slug]` | Très bonne |
-| Jobs similaires | ✅ Implémenté | `/jobs/[slug]` | Bonne |
-| Offres par type | ✅ Implémenté | `/jobs/type/[type]` | Bonne |
-| Offres par niveau | ✅ Implémenté | `/jobs/level/[level]` | Bonne |
-| Offres par localisation | ✅ Implémenté | `/jobs/location/[location]` | Bonne |
-| Offres par langue | ✅ Implémenté | `/jobs/language/[language]` | Bonne |
-| Annuaire des types | ✅ Implémenté | `/jobs/types` | Bonne |
-| Annuaire des niveaux | ✅ Implémenté | `/jobs/levels` | Bonne |
-| Annuaire des localisations | ✅ Implémenté | `/jobs/locations` | Bonne |
-| Annuaire des langues | ✅ Implémenté | `/jobs/languages` | Bonne |
+| Fonctionnalité | Statut | Migration requise |
+|---------------|--------|------------------|
+| Liste des offres avec ISR | OK | Passer au filtrage SQL |
+| Recherche textuelle (debounce) | OK | Passer à full-text PostgreSQL |
+| Filtres multi-critères | OK | Passer côté serveur |
+| Tri et pagination | OK | Passer côté serveur |
+| Page détail d'une offre | OK | Remplacer source Airtable |
+| Pages catégories (type/level/location/lang) | OK | Idem |
+| Jobs similaires | OK | Requête SQL |
 
-### 1.2 SEO & Indexation
+### SEO & Distribution
 
-| Fonctionnalité | Statut | Qualité |
-|---------------|--------|---------|
-| Génération de sitemap.xml | ✅ Dynamique (ISR 5min) | Très bonne |
-| robots.txt dynamique | ✅ Implémenté | Bonne |
-| Open Graph images génériques | ✅ Edge runtime | Bonne |
-| Open Graph images par job | ✅ Edge runtime | Bonne |
-| Schema.org JobPosting | ✅ JSON-LD | Très bonne |
-| Schema.org BreadcrumbList | ✅ JSON-LD | Bonne |
-| Schema.org WebSite | ✅ JSON-LD | Bonne |
-| Schema.org Organization | ✅ JSON-LD | Bonne |
-| Métadonnées dynamiques | ✅ Par page | Très bonne |
-| Twitter Cards | ✅ Configurable | Bonne |
-| Canonical URLs | ✅ Implémenté | Bonne |
-| Hreflang | ✅ en + x-default | Partielle |
+| Fonctionnalité | Statut | Action |
+|---------------|--------|--------|
+| Sitemap dynamique | OK | Conserver |
+| Open Graph images (Edge) | OK | Conserver |
+| Schema.org JobPosting | OK | Conserver |
+| RSS / Atom / JSON Feed | OK | Conserver |
+| robots.txt | OK | Conserver |
 
-### 1.3 Distribution de contenu
+### Pages statiques
 
-| Fonctionnalité | Statut | Qualité |
-|---------------|--------|---------|
-| RSS 2.0 | ✅ `/feed.xml` | Bonne |
-| Atom 1.0 | ✅ `/atom.xml` | Bonne |
-| JSON Feed 1.1 | ✅ `/feed.json` | Bonne |
-
-### 1.4 Engagement utilisateur
-
-| Fonctionnalité | Statut | Qualité |
-|---------------|--------|---------|
-| Alertes email (inscription) | ✅ Via Encharge | Bonne |
-| Formulaire de contact | ✅ Page statique | Basique |
-| FAQ avec accordéon | ✅ Configurable | Bonne |
-
-### 1.5 Marketing & Monétisation
-
-| Fonctionnalité | Statut | Qualité |
-|---------------|--------|---------|
-| Page Pricing | ✅ 3 plans statiques | Basique |
-| CTA "Poster une offre" | ✅ Banner configurable | Bonne |
-| Liens vers Stripe (externes) | ✅ Configuré | Basique |
-| Changelog | ✅ Page statique | Basique |
-
-### 1.6 Pages institutionnelles
-
-| Fonctionnalité | Statut | Qualité |
-|---------------|--------|---------|
-| À propos | ✅ Configurable | Bonne |
-| Contact | ✅ Configurable | Bonne |
-| Privacy Policy | ✅ Statique | Basique |
-| Terms of Service | ✅ Statique | Basique |
-
-### 1.7 Configuration & Personnalisation
-
-| Fonctionnalité | Statut | Qualité |
-|---------------|--------|---------|
-| Configuration centralisée 1400 lignes | ✅ config.ts | Très bonne |
-| Support 180+ langues | ✅ Constantes | Très bonne |
-| Support 60+ devises + crypto | ✅ Constantes | Très bonne |
-| 18 niveaux de carrière | ✅ Enum | Très bonne |
-| Thème configurable | ✅ Via config | Bonne |
-| Fonts configurables (3 options) | ✅ Via config | Bonne |
-| Navigation configurable | ✅ Via config | Bonne |
-| Footer multi-colonnes configurable | ✅ Via config | Très bonne |
-| Scripts analytics injectables | ✅ Via config | Bonne |
+| Page | Statut | Action |
+|------|--------|--------|
+| À propos, Contact, FAQ | OK | Conserver |
+| Privacy, Terms | OK | Conserver |
+| Pricing | Partiel | Connecter à Stripe Phase 2 |
+| Job Alerts (Encharge) | À remplacer | Migrer vers Resend |
 
 ---
 
-## 2. Fonctionnalités manquantes (vs plateforme SaaS complète)
+## 2. Fonctionnalités à construire — Par phase
 
-### 2.1 CRITIQUE — Bloquantes pour un SaaS
+### Phase 1 — Infrastructure (fondation)
 
-| Fonctionnalité | Priorité | Effort | Valeur |
-|---------------|---------|--------|--------|
-| Authentification employeur | P0 | 1 sem | ⭐⭐⭐⭐⭐ |
-| Dashboard employeur | P0 | 3 sem | ⭐⭐⭐⭐⭐ |
-| Soumission d'offre (UI) | P0 | 2 sem | ⭐⭐⭐⭐⭐ |
-| Paiement (Stripe integration) | P0 | 2 sem | ⭐⭐⭐⭐⭐ |
-| Modération des offres | P0 | 1 sem | ⭐⭐⭐⭐ |
-
-### 2.2 HAUTE IMPORTANCE — Core UX manquant
-
-| Fonctionnalité | Priorité | Effort | Valeur |
-|---------------|---------|--------|--------|
-| Candidature directe (in-app) | P1 | 2 sem | ⭐⭐⭐⭐ |
-| Profil candidat | P1 | 3 sem | ⭐⭐⭐⭐ |
-| Sauvegarde d'offres | P1 | 1 sem | ⭐⭐⭐⭐ |
-| Alertes email personnalisées | P1 | 1 sem | ⭐⭐⭐⭐ |
-| Pagination côté serveur | P1 | 1 sem | ⭐⭐⭐⭐ |
-| Recherche full-text côté serveur | P1 | 1 sem | ⭐⭐⭐⭐ |
-
-### 2.3 MOYENNE IMPORTANCE — Différenciation
-
-| Fonctionnalité | Priorité | Effort | Valeur |
-|---------------|---------|--------|--------|
-| Profil entreprise enrichi | P2 | 2 sem | ⭐⭐⭐ |
-| Analytics employeur (vues, clics) | P2 | 1 sem | ⭐⭐⭐⭐ |
-| API publique (pour agrégateurs) | P2 | 2 sem | ⭐⭐⭐ |
-| Webhooks sortants | P2 | 1 sem | ⭐⭐⭐ |
-| Multi-langue UI (i18n) | P2 | 3 sem | ⭐⭐⭐ |
-| Dark mode | P2 | 1 sem | ⭐⭐ |
-| Recommandations personnalisées | P2 | 2 sem | ⭐⭐⭐ |
-
-### 2.4 FAIBLE IMPORTANCE — Nice to have
-
-| Fonctionnalité | Priorité | Effort | Valeur |
-|---------------|---------|--------|--------|
-| Partage d'offre sur réseaux sociaux | P3 | 3 jours | ⭐⭐ |
-| Recherche avancée (opérateurs booléens) | P3 | 1 sem | ⭐⭐ |
-| Comparaison d'offres | P3 | 1 sem | ⭐ |
-| Export PDF d'offre | P3 | 3 jours | ⭐ |
-| CV Parsing | P3 | 3 sem | ⭐⭐ |
-| Chatbot RH | P3 | 4 sem | ⭐⭐ |
+| Fonctionnalité | Route/Composant | Technologie |
+|---------------|----------------|------------|
+| Authentification Google | `/api/auth/[...nextauth]` | NextAuth v5 |
+| Authentification email (magic link) | `/api/auth/[...nextauth]` | NextAuth v5 + Resend |
+| Page login / register | `/auth/login` | NextAuth + shadcn |
+| Alertes email redesign | `/api/v1/alerts` | Resend + React Email |
+| Email de bienvenue | Background | React Email template |
+| Rate limiting distribué | Middleware global | Upstash Redis |
+| Monitoring erreurs | Auto (Sentry SDK) | Sentry |
 
 ---
 
-## 3. Matrice de compétitivité vs plateformes existantes
+### Phase 2 — Fonctionnalités core
 
-| Fonctionnalité | Ebarka (actuel) | LinkedIn | Indeed | Welcome to the Jungle | JobBoard.io |
-|---------------|----------------|---------|--------|----------------------|-------------|
-| Liste d'offres | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Recherche | ✅ Client-side | ✅ Server | ✅ Server | ✅ Server | ✅ Server |
-| Filtres avancés | ✅ | ✅ | ✅ | ✅ | ✅ |
-| SEO optimisé | ⭐⭐⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ |
-| RSS Feeds | ✅ | ❌ | ✅ | ❌ | ✅ |
-| Multi-devises | ✅ 60+ | ❌ | Partiel | ❌ | Partiel |
-| 180+ langues filtre | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Auth candidat | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Dashboard employeur | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Analytics employeur | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Candidature in-app | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Profil candidat | ❌ | ✅ | ✅ | ✅ | ❌ |
-| Paiements intégrés | ❌ (lien externe) | ✅ | ✅ | ✅ | ✅ |
+#### Dashboard Employeur
 
-**Avantage compétitif d'Ebarka :**
-- SEO excellent (best-in-class pour un job board small/mid)
-- Multi-devises et multi-langues dépassant la concurrence
-- Performance ISR + Edge
+| Fonctionnalité | Route | Description |
+|---------------|-------|-------------|
+| Vue d'ensemble stats | `/dashboard` | Vues, candidatures, offres actives |
+| Liste de mes offres | `/dashboard/jobs` | CRUD complet |
+| Créer une offre | `/dashboard/jobs/new` | Formulaire Zod-validé |
+| Éditer une offre | `/dashboard/jobs/[id]/edit` | Même formulaire |
+| Analytics d'une offre | `/dashboard/jobs/[id]/analytics` | Vues, clics, candidatures |
+| Profil entreprise | `/dashboard/company` | Logo Cloudinary, description |
+| Voir les candidatures | `/dashboard/jobs/[id]/applications` | Liste avec statuts |
 
-**Retard à combler :**
-- Dashboard employeur complet
-- Flux candidat (login, profil, candidature)
-- Paiements natifs
+#### Espace Candidat
+
+| Fonctionnalité | Route | Description |
+|---------------|-------|-------------|
+| Profil candidat | `/profile` | Nom, photo, résumé |
+| Mes documents | `/profile/documents` | CV, lettres, portfolios |
+| Candidatures envoyées | `/profile/applications` | Historique + statuts |
+| Offres sauvegardées | `/profile/saved-jobs` | Bookmark d'offres |
+| Candidature in-app | `/jobs/[slug]/apply` | Formulaire + documents |
+
+#### Upload Fichiers (Cloudinary)
+
+| Fonctionnalité | API Route | Formats acceptés |
+|---------------|----------|-----------------|
+| Upload CV | `POST /api/v1/documents/upload` | PDF (max 10MB) |
+| Upload photo profil | `POST /api/v1/documents/upload` | JPG, PNG (max 5MB) |
+| Upload logo entreprise | `POST /api/v1/documents/upload` | JPG, PNG, SVG |
+| Suppression document | `DELETE /api/v1/documents/[id]` | — |
+
+#### Pagination et recherche côté serveur
+
+```
+AVANT (actuel)                 APRÈS (Phase 2)
+───────────────────            ───────────────────────────
+getJobs() → tous en RAM  →     getJobs(filters) → SQL paginé
+filtrage JS client-side  →     WHERE clause PostgreSQL
+nuqs → client state      →     searchParams → Server Component
+```
 
 ---
 
-## 4. Roadmap fonctionnelle recommandée
+### Phase 3 — Intelligence Artificielle (Claude API)
 
-### MVP SaaS (3 mois)
-```
-✅ Déjà en place :
-  - Listing + filtres + pagination
-  - SEO + structured data
-  - RSS feeds
-  - Job alerts (Encharge)
+C'est la **fonctionnalité différenciante** d'Ebarka-Jobs vis-à-vis des concurrents.
 
-🚧 À ajouter pour le MVP SaaS :
-  - Authentification employeur (NextAuth)
-  - Formulaire de soumission d'offre
-  - Dashboard employeur basique
-  - Stripe checkout (paiement à l'offre)
-  - Base de données PostgreSQL
-```
+#### Génération de Lettre de Motivation
 
-### V1 Complète (6 mois)
+| Étape | Description |
+|-------|-------------|
+| Entrée | CV du candidat (texte extrait du PDF) + description de l'offre |
+| Traitement | Claude API — prompt structuré en français |
+| Sortie | Lettre de motivation personnalisée (~300-400 mots) |
+| Post-traitement | Éditeur de texte riche + export PDF via Cloudinary |
+
 ```
-🔜 V1 :
-  - Profil entreprise enrichi
-  - Analytics de base (vues, clics)
-  - Plans d'abonnement (Stripe Subscriptions)
-  - Modération admin
-  - Alertes email personnalisées par filtre
+Route : POST /api/ai/generate-cover-letter
+Auth  : Requis (candidat connecté)
+Model : claude-sonnet-4-6
+Limit : 10 générations/jour par utilisateur (Upstash)
 ```
 
-### V2 Croissance (12 mois)
+#### Génération / Structuration de CV
+
+| Étape | Description |
+|-------|-------------|
+| Entrée | CV brut (texte copié-collé ou PDF parsé) |
+| Traitement | Claude API — extraction et structuration des informations |
+| Sortie | CV structuré JSON + rendu HTML formaté |
+| Export | PDF via Cloudinary ou impression navigateur |
+
 ```
-🔮 V2 :
-  - Profil candidat + CV
-  - Candidature in-app
-  - Recommandations ML
-  - API publique
-  - i18n UI (FR/EN minimum)
-  - White-label pour revendeurs
+Route : POST /api/ai/generate-cv
+Auth  : Requis
+Model : claude-sonnet-4-6
 ```
+
+#### Aide à la rédaction d'offre (employeur)
+
+| Étape | Description |
+|-------|-------------|
+| Entrée | Titre du poste + quelques mots-clés |
+| Traitement | Claude génère une description complète et professionnelle |
+| Sortie | Description pré-remplie dans le formulaire (éditable) |
+
+```
+Route : POST /api/ai/generate-job-description
+Auth  : Requis (employeur)
+Model : claude-haiku-4-5 (plus rapide, moins cher pour cette tâche)
+```
+
+#### Score d'adéquation offre/candidat (future V2)
+
+```
+Analyser CV + offre → Claude retourne un score 0-100
+et une liste des points forts / points faibles du match
+```
+
+---
+
+### Phase 3 — Paiements (Stripe)
+
+| Fonctionnalité | Description |
+|---------------|-------------|
+| Checkout offre | Session Stripe pour publier une offre |
+| Plans d'abonnement | Starter (gratuit), Pro (29€), Business (99€) |
+| Webhook confirmation | Activer l'offre après paiement |
+| Historique facturation | `/dashboard/billing` |
+| Annulation / remboursement | Via Stripe Customer Portal |
+
+#### Plans proposés
+
+| Plan | Prix | Offres | Durée | Features |
+|------|------|--------|-------|---------|
+| Starter | Gratuit | 1 | 30 jours | Listing standard |
+| Pro | 29€/offre | 5/mois | 60 jours | Featured, analytics, IA incluse |
+| Business | 99€/mois | Illimité | 90 jours | API, branding, support prioritaire |
+
+---
+
+## 3. Templates Email (React Email + Resend)
+
+| Template | Déclencheur | Destinataire |
+|---------|-------------|-------------|
+| `welcome.tsx` | Inscription | Candidat/Employeur |
+| `job-alert.tsx` | Nouvelles offres correspondantes | Abonné |
+| `application-received.tsx` | Nouvelle candidature | Employeur |
+| `application-status.tsx` | Changement de statut | Candidat |
+| `job-published.tsx` | Offre activée | Employeur |
+| `magic-link.tsx` | Connexion email | Utilisateur |
+| `invoice.tsx` | Paiement confirmé | Employeur |
+
+---
+
+## 4. Matrice de compétitivité — Stack cible
+
+| Fonctionnalité | Ebarka cible | LinkedIn | Indeed | WTTJ |
+|---------------|-------------|---------|--------|------|
+| SEO optimisé | 5/5 | 3/5 | 4/5 | 4/5 |
+| Génération LM par IA | 5/5 | 0/5 | 0/5 | 0/5 |
+| Génération CV par IA | 5/5 | 2/5 | 0/5 | 0/5 |
+| Dashboard employeur | 4/5 | 5/5 | 5/5 | 5/5 |
+| Candidature in-app | 4/5 | 5/5 | 5/5 | 5/5 |
+| Multi-devises (60+) | 5/5 | 2/5 | 2/5 | 2/5 |
+| RSS Feeds | 5/5 | 0/5 | 3/5 | 0/5 |
+| Performance (ISR+Edge) | 5/5 | 3/5 | 3/5 | 3/5 |
+
+**Avantage concurrentiel clé :** L'intégration Claude API pour la génération de CV et lettres de motivation est absente chez tous les concurrents principaux — c'est le différenciateur principal d'Ebarka-Jobs.

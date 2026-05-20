@@ -1,308 +1,202 @@
-# Analyse de la Base de Données
+# Analyse de la Base de Données — Stack cible : PostgreSQL + Prisma + Supabase
 
-## Architecture actuelle : Airtable
+## Décision architecturale
 
-### Positionnement technologique
+**PostgreSQL via Supabase + Prisma ORM** remplace Airtable dès le lancement.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      AIRTABLE                           │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │  Base: Ebarka-Jobs (AIRTABLE_BASE_ID)           │   │
-│  │  Table: Jobs (AIRTABLE_TABLE_NAME)              │   │
-│  │  Records: ~5000 max recommandés par Airtable    │   │
-│  └─────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
-          │ REST API (HTTPS)
-          │ Authentification: Bearer Token
-          ▼
-┌─────────────────────────────────────────────────────────┐
-│  lib/db/airtable.server.ts                              │
-│  - getJobs() → React.cache()                            │
-│  - getJob(id) → React.cache()                           │
-│  - testConnection()                                     │
-│  - 7 fonctions de normalisation                         │
-└─────────────────────────────────────────────────────────┘
-          │
-          ▼
-┌─────────────────────────────────────────────────────────┐
-│  Next.js Pages (SSG/ISR)                                │
-│  - revalidate: 300 (5 minutes)                          │
-│  - generateStaticParams() pour les slugs                │
-└─────────────────────────────────────────────────────────┘
+Supabase (PostgreSQL managé)
+    ├── Backups automatiques
+    ├── Row Level Security (RLS)
+    ├── Realtime subscriptions
+    └── Storage (complémentaire à Cloudinary)
+
+Prisma ORM
+    ├── Typage TypeScript fort (type-safe queries)
+    ├── Migrations versionnées
+    ├── Prisma Studio (UI BDD)
+    └── Compatibilité Next.js App Router
 ```
 
 ---
 
-## Schéma de données complet
-
-### Table `Jobs`
-
-| Champ | Type Airtable | Type TypeScript | Nullable | Valeur par défaut |
-|-------|--------------|-----------------|----------|-------------------|
-| `id` | Record ID | `string` | Non | Auto-généré |
-| `title` | Single line text | `string` | Non | — |
-| `company` | Single line text | `string` | Non | — |
-| `type` | Single select | `JobType` | Non | — |
-| `salary_min` | Number | `number \| null` | Oui | null |
-| `salary_max` | Number | `number \| null` | Oui | null |
-| `salary_currency` | Single select | `CurrencyCode` | Oui | "USD" |
-| `salary_unit` | Single select | `SalaryUnit` | Oui | — |
-| `description` | Long text | `string` | Non | — |
-| `benefits` | Long text | `string \| null` | Oui | null |
-| `application_requirements` | Long text | `string \| null` | Oui | null |
-| `apply_url` | URL | `string` | Non | — |
-| `posted_date` | Date | `string` (ISO) | Non | — |
-| `valid_through` | Date | `string \| null` | Oui | null |
-| `job_identifier` | Single line text | `string \| null` | Oui | null |
-| `job_source_name` | Single line text | `string \| null` | Oui | null |
-| `status` | Single select | `'active' \| 'inactive'` | Non | — |
-| `career_level` | Multiple select | `CareerLevel[]` | Non | ['NotSpecified'] |
-| `visa_sponsorship` | Single select | `'Yes' \| 'No' \| 'Not specified'` | Non | 'Not specified' |
-| `featured` | Checkbox | `boolean` | Non | false |
-| `workplace_type` | Single select | `WorkplaceType` | Non | 'Not specified' |
-| `remote_region` | Single select | `RemoteRegion \| null` | Oui | null |
-| `timezone_requirements` | Single line text | `string \| null` | Oui | null |
-| `workplace_city` | Single line text | `string \| null` | Oui | null |
-| `workplace_country` | Single line text | `string \| null` | Oui | null |
-| `languages` | Multiple select | `LanguageCode[]` | Non | [] |
-| `skills` | Long text | `string \| null` | Oui | null |
-| `qualifications` | Long text | `string \| null` | Oui | null |
-| `education_requirements` | Long text | `string \| null` | Oui | null |
-| `experience_requirements` | Long text | `string \| null` | Oui | null |
-| `industry` | Single line text | `string \| null` | Oui | null |
-| `occupational_category` | Single line text | `string \| null` | Oui | null |
-| `responsibilities` | Long text | `string \| null` | Oui | null |
-
----
-
-## Types TypeScript (`lib/db/airtable.ts`)
-
-```typescript
-export type JobType = 'Full-time' | 'Part-time' | 'Contract' | 'Freelance';
-
-export type SalaryUnit = 'hour' | 'day' | 'week' | 'month' | 'year' | 'project';
-
-export type CareerLevel =
-  | 'Internship' | 'EntryLevel' | 'Associate' | 'Junior'
-  | 'MidLevel' | 'Senior' | 'Staff' | 'Principal' | 'Lead'
-  | 'Manager' | 'SeniorManager' | 'Director' | 'SeniorDirector'
-  | 'VP' | 'SVP' | 'EVP' | 'CLevel' | 'NotSpecified';
-
-export interface Salary {
-  min: number | null;
-  max: number | null;
-  currency: CurrencyCode;
-  unit: SalaryUnit;
-}
-
-export interface Job {
-  id: string;
-  title: string;
-  company: string;
-  type: JobType;
-  salary: Salary | null;
-  description: string;
-  benefits: string | null;
-  application_requirements: string | null;
-  apply_url: string;
-  posted_date: string;
-  valid_through: string | null;
-  job_identifier: string | null;
-  job_source_name: string | null;
-  status: 'active' | 'inactive';
-  career_level: CareerLevel[];
-  visa_sponsorship: 'Yes' | 'No' | 'Not specified';
-  featured: boolean;
-  workplace_type: WorkplaceType;
-  remote_region: RemoteRegion;
-  timezone_requirements: string | null;
-  workplace_city: string | null;
-  workplace_country: string | null;
-  languages: LanguageCode[];
-  skills: string | null;
-  qualifications: string | null;
-  education_requirements: string | null;
-  experience_requirements: string | null;
-  industry: string | null;
-  occupational_category: string | null;
-  responsibilities: string | null;
-}
-```
-
----
-
-## Limites critiques d'Airtable
-
-### 1. Plafonds de données
-
-| Limite | Valeur | Impact |
-|--------|--------|--------|
-| Records par base (Free) | 1,000 | Bloquant très tôt |
-| Records par base (Pro) | 50,000 | Limite à ~200 offres/jour sur 250 jours |
-| Records par base (Business) | 125,000 | Suffisant pour 1-2 ans |
-| Taille API response | Non limité | Charge mémoire côté Next.js |
-| Rate limit API | 5 req/sec | Problème si plusieurs utilisateurs simultanés |
-
-### 2. Problèmes de performance
-
-```typescript
-// PROBLÈME : getJobs() charge TOUS les records actifs en mémoire
-const records = await base(TABLE_NAME)
-  .select({
-    filterByFormula: "{status} = 'active'",
-    sort: [{ field: 'posted_date', direction: 'desc' }],
-  })
-  .all(); // ← .all() = pagination automatique, TOUTES les pages chargées
-```
-
-Avec 10,000+ offres, cette requête :
-- Prend plusieurs secondes
-- Utilise ~50MB de RAM
-- Consomme plusieurs requêtes paginées API Airtable
-
-### 3. Pas de relations entre tables
-
-Airtable supporte les liaisons entre tables, mais la structure actuelle n'a qu'une seule table. Il manque des tables pour :
-- Employeurs (companies)
-- Catégories/secteurs (industries)
-- Utilisateurs/candidats
-- Paiements
-
-### 4. Coût à l'échelle
-
-| Plan Airtable | Coût/mois | Records | Adapté si |
-|---------------|-----------|---------|-----------|
-| Free | $0 | 1,000 | MVP local |
-| Plus | $10/user | 10,000 | Petite équipe |
-| Pro | $20/user | 100,000 | Croissance |
-| Business | $45/user | 125,000 | Mid-market |
-
----
-
-## Normalisation des données — Analyse des fonctions
-
-### Fonctions présentes dans `airtable.server.ts`
-
-```
-normalizeCareerLevel()     → Converts "Entry Level" → "EntryLevel"
-normalizeWorkplaceType()   → Validates against whitelist
-normalizeRemoteRegion()    → Validates against whitelist
-normalizeLanguages()       → Parses "French (fr)" format or ISO codes
-normalizeCurrency()        → Parses "USD (United States Dollar)" format
-normalizeBenefits()        → Truncate à 1000 chars
-normalizeApplicationRequirements() → Truncate à 1000 chars
-normalizeVisaSponsorship() → "yes"/"no" → "Yes"/"No"/"Not specified"
-```
-
-**Problèmes détectés :**
-
-1. **DRY violation** — `normalizeBenefits` et `normalizeApplicationRequirements` sont identiques :
-   ```typescript
-   // Ces deux fonctions font exactement la même chose
-   // Devrait être une seule fonction normalizeTextField(value, maxLength)
-   ```
-
-2. **Validation faible** — `normalizeCareerLevel()` convertit `"Entry Level"` → `"EntryLevel"` sans valider que le résultat est dans l'enum `CareerLevel`. Des valeurs inconnues passent silencieusement.
-
-3. **Absence de schéma de validation** — Pas de Zod/Yup pour valider la structure Airtable. Les `as string` TypeScript casts peuvent crasher si le schéma change.
-
-4. **Double normalisation** — La logique de slug est dans `lib/utils/slugify.ts` mais le champ `id` Airtable est utilisé directement pour `getJob()`. Si la structure de l'URL change, les slugs existants cassent.
-
----
-
-## Flux de données — Problèmes identifiés
-
-```
-Airtable → getJobs() → [tous les records] → HomePage → filter client
-                                              ↑
-                                    ❌ PROBLÈME : charge mémoire O(n)
-```
-
-**Requête Airtable actuelle :**
-- Filtre `status = 'active'` (côté serveur — bien)
-- Tri par `posted_date desc` (côté serveur — bien)
-- Pagination `.all()` — charge tout (problème)
-- Pas de sélection de champs (charge tous les champs même inutilisés)
-
-**Amélioration immédiate possible sans changer la BDD :**
-```typescript
-// Sélectionner uniquement les champs nécessaires pour la liste
-.select({
-  filterByFormula: "{status} = 'active'",
-  sort: [{ field: 'posted_date', direction: 'desc' }],
-  fields: ['title', 'company', 'type', 'salary_min', 'salary_max', 
-           'salary_currency', 'salary_unit', 'workplace_type', 
-           'workplace_city', 'workplace_country', 'posted_date', 
-           'career_level', 'featured', 'visa_sponsorship'],
-})
-```
-
----
-
-## Plan de migration vers PostgreSQL
-
-### Schéma Prisma cible
+## Schéma Prisma complet
 
 ```prisma
 // prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // Supabase: connection pooling séparé
+}
+
+// ─── AUTH (NextAuth.js v5) ───────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?   // Cloudinary URL
+  role          UserRole  @default(EMPLOYER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations NextAuth
+  accounts      Account[]
+  sessions      Session[]
+
+  // Relations métier
+  company       Company?  @relation(fields: [companyId], references: [id])
+  companyId     String?
+  savedJobs     SavedJob[]
+  applications  Application[]
+  documents     Document[]
+
+  @@index([email])
+  @@index([companyId])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── ENTREPRISES ─────────────────────────────────────────────────
 
 model Company {
   id          String   @id @default(cuid())
   name        String
   slug        String   @unique
-  logo        String?
+  logo        String?  // Cloudinary URL
   website     String?
-  description String?
+  description String?  @db.Text
+  industry    String?
+  size        CompanySize?
+  location    String?
+  verified    Boolean  @default(false)
   createdAt   DateTime @default(now())
-  jobs        Job[]
+  updatedAt   DateTime @updatedAt
+
   users       User[]
+  jobs        Job[]
+
+  @@index([slug])
 }
 
+enum CompanySize {
+  SOLO
+  STARTUP      // 2-10
+  SMALL        // 11-50
+  MEDIUM       // 51-200
+  LARGE        // 201-1000
+  ENTERPRISE   // 1000+
+}
+
+// ─── OFFRES D'EMPLOI ─────────────────────────────────────────────
+
 model Job {
-  id                     String       @id @default(cuid())
-  externalId             String?      // Airtable ID pour migration
+  id                     String        @id @default(cuid())
   title                  String
-  slug                   String       @unique
+  slug                   String        @unique
   type                   JobType
+  status                 JobStatus     @default(PENDING)
+  featured               Boolean       @default(false)
+
+  // Salaire
   salaryMin              Float?
   salaryMax              Float?
-  salaryCurrency         String       @default("USD")
+  salaryCurrency         String        @default("EUR")
   salaryUnit             SalaryUnit?
-  description            String       @db.Text
-  benefits               String?      @db.Text
-  applicationRequirements String?     @db.Text
-  applyUrl               String
-  postedDate             DateTime     @default(now())
+
+  // Contenu
+  description            String        @db.Text
+  benefits               String?       @db.Text
+  applicationRequirements String?      @db.Text
+  skills                 String?       @db.Text
+  qualifications         String?       @db.Text
+  educationRequirements  String?       @db.Text
+  experienceRequirements String?       @db.Text
+  responsibilities       String?       @db.Text
+
+  // Candidature
+  applyUrl               String?       // Lien externe (optionnel)
+  applyInApp             Boolean       @default(false) // Candidature in-app
+
+  // Dates
+  postedDate             DateTime      @default(now())
   validThrough           DateTime?
-  status                 JobStatus    @default(ACTIVE)
-  featured               Boolean      @default(false)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  // Localisation
   workplaceType          WorkplaceType @default(NOT_SPECIFIED)
   remoteRegion           String?
   timezoneRequirements   String?
   workplaceCity          String?
   workplaceCountry       String?
-  skills                 String?      @db.Text
-  qualifications         String?      @db.Text
-  educationRequirements  String?      @db.Text
-  experienceRequirements String?      @db.Text
-  industry               String?
+
+  // Metadata
+  visaSponsorship        VisaStatus    @default(NOT_SPECIFIED)
   occupationalCategory   String?
-  responsibilities       String?      @db.Text
-  visaSponsorship        VisaStatus   @default(NOT_SPECIFIED)
+  industry               String?
   jobIdentifier          String?
-  jobSourceName          String?
-  company                Company      @relation(fields: [companyId], references: [id])
+
+  // Relations
+  company                Company       @relation(fields: [companyId], references: [id])
   companyId              String
   careerLevels           JobCareerLevel[]
   languages              JobLanguage[]
-  createdAt              DateTime     @default(now())
-  updatedAt              DateTime     @updatedAt
-  
+  applications           Application[]
+  savedBy                SavedJob[]
+  payment                Payment?
+
+  // Analytics
+  viewCount              Int           @default(0)
+  clickCount             Int           @default(0) // Clics sur "Postuler"
+
   @@index([status, postedDate(sort: Desc)])
   @@index([companyId])
   @@index([workplaceType])
   @@index([featured, status])
+  @@index([slug])
 }
 
 enum JobType {
@@ -310,6 +204,7 @@ enum JobType {
   PART_TIME
   CONTRACT
   FREELANCE
+  INTERNSHIP
 }
 
 enum SalaryUnit {
@@ -322,10 +217,11 @@ enum SalaryUnit {
 }
 
 enum JobStatus {
-  ACTIVE
-  INACTIVE
-  PENDING
-  EXPIRED
+  PENDING      // En attente de paiement/modération
+  ACTIVE       // Visible publiquement
+  INACTIVE     // Désactivé par l'employeur
+  EXPIRED      // Date validThrough dépassée
+  REJECTED     // Refusé par la modération
 }
 
 enum WorkplaceType {
@@ -340,17 +236,409 @@ enum VisaStatus {
   NO
   NOT_SPECIFIED
 }
+
+model JobCareerLevel {
+  id      String      @id @default(cuid())
+  jobId   String
+  level   CareerLevel
+  job     Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, level])
+  @@index([jobId])
+}
+
+enum CareerLevel {
+  INTERNSHIP
+  ENTRY_LEVEL
+  ASSOCIATE
+  JUNIOR
+  MID_LEVEL
+  SENIOR
+  STAFF
+  PRINCIPAL
+  LEAD
+  MANAGER
+  SENIOR_MANAGER
+  DIRECTOR
+  SENIOR_DIRECTOR
+  VP
+  SVP
+  EVP
+  C_LEVEL
+  NOT_SPECIFIED
+}
+
+model JobLanguage {
+  id       String @id @default(cuid())
+  jobId    String
+  language String // ISO 639-1 code (ex: "fr", "en")
+  job      Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, language])
+  @@index([jobId])
+}
+
+// ─── CANDIDATURES ────────────────────────────────────────────────
+
+model Application {
+  id          String            @id @default(cuid())
+  status      ApplicationStatus @default(PENDING)
+  coverLetter String?           @db.Text // Peut être généré par Claude
+  message     String?           @db.Text
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  // Relations
+  job         Job               @relation(fields: [jobId], references: [id])
+  jobId       String
+  user        User              @relation(fields: [userId], references: [id])
+  userId      String
+  documents   ApplicationDocument[]
+
+  @@unique([jobId, userId]) // Un candidat ne peut postuler qu'une fois
+  @@index([jobId])
+  @@index([userId])
+}
+
+enum ApplicationStatus {
+  PENDING
+  REVIEWING
+  INTERVIEW
+  OFFER
+  REJECTED
+  WITHDRAWN
+}
+
+model ApplicationDocument {
+  id            String      @id @default(cuid())
+  applicationId String
+  documentId    String
+  type          DocType
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  document      Document    @relation(fields: [documentId], references: [id])
+
+  @@index([applicationId])
+}
+
+// ─── DOCUMENTS (Cloudinary) ───────────────────────────────────────
+
+model Document {
+  id           String    @id @default(cuid())
+  type         DocType
+  name         String
+  cloudinaryId String    // Public ID Cloudinary
+  url          String    // URL Cloudinary
+  size         Int?      // Bytes
+  mimeType     String?
+  aiGenerated  Boolean   @default(false) // Généré par Claude
+  createdAt    DateTime  @default(now())
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  applications ApplicationDocument[]
+
+  @@index([userId])
+}
+
+enum DocType {
+  CV
+  COVER_LETTER
+  PORTFOLIO
+  CERTIFICATE
+  OTHER
+}
+
+// ─── OFFRES SAUVEGARDÉES ──────────────────────────────────────────
+
+model SavedJob {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId     String
+
+  @@unique([userId, jobId])
+  @@index([userId])
+}
+
+// ─── PAIEMENTS (Stripe) ───────────────────────────────────────────
+
+model Payment {
+  id                String        @id @default(cuid())
+  stripeSessionId   String        @unique
+  stripePaymentId   String?
+  amount            Int           // En centimes
+  currency          String        @default("eur")
+  status            PaymentStatus @default(PENDING)
+  plan              JobPlan
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  job               Job           @relation(fields: [jobId], references: [id])
+  jobId             String        @unique
+
+  @@index([stripeSessionId])
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum JobPlan {
+  STARTER    // Gratuit
+  PRO        // ~29€
+  BUSINESS   // ~99€
+}
+
+// ─── ALERTES EMAIL ────────────────────────────────────────────────
+
+model JobAlert {
+  id        String   @id @default(cuid())
+  email     String
+  name      String
+  active    Boolean  @default(true)
+  filters   Json?    // { types: [], levels: [], remote: bool, ... }
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+// ─── GÉNÉRATION IA ────────────────────────────────────────────────
+
+model AiGeneration {
+  id          String       @id @default(cuid())
+  type        AiGenType
+  prompt      String       @db.Text
+  result      String       @db.Text
+  model       String       @default("claude-sonnet-4-6")
+  tokens      Int?
+  createdAt   DateTime     @default(now())
+
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId      String?
+  document    Document?    @relation(fields: [documentId], references: [id])
+  documentId  String?      @unique
+
+  @@index([userId])
+}
+
+enum AiGenType {
+  CV
+  COVER_LETTER
+  JOB_DESCRIPTION // Aide employeur à rédiger une offre
+}
+```
+
+> Ajouter `AiGeneration` à `User` et `Document` :
+> ```prisma
+> // Dans model User
+> aiGenerations AiGeneration[]
+> // Dans model Document
+> aiGeneration  AiGeneration?
+> ```
+
+---
+
+## Configuration Supabase
+
+### Variables d'environnement
+
+```bash
+# .env.local
+# Supabase — Connection pooling (pour Prisma en serverless)
+DATABASE_URL="postgresql://postgres.[ref]:[password]@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
+
+# Supabase — Connexion directe (pour les migrations Prisma)
+DIRECT_URL="postgresql://postgres.[ref]:[password]@aws-0-eu-central-1.pooler.supabase.com:5432/postgres"
+```
+
+### `lib/db/prisma.ts`
+
+```typescript
+import { PrismaClient } from '@prisma/client';
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  });
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 ```
 
 ---
 
-## Estimation d'effort de migration
+## Row Level Security (RLS) Supabase
 
-| Étape | Effort | Complexité |
-|-------|--------|------------|
-| Setup Prisma + PostgreSQL (Neon/Supabase) | 1 jour | Faible |
-| Écriture du schéma | 2 jours | Moyen |
-| Script d'import Airtable → PostgreSQL | 2 jours | Moyen |
-| Remplacement de `lib/db/airtable.server.ts` | 3 jours | Moyen |
-| Tests et validation | 2 jours | Moyen |
-| **Total** | **~2 semaines** | — |
+Activer le RLS pour protéger les données sensibles (applications, documents) :
+
+```sql
+-- Seul l'employeur propriétaire peut voir ses jobs
+ALTER TABLE "Job" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "employer_own_jobs" ON "Job"
+  FOR ALL USING (
+    "companyId" IN (
+      SELECT id FROM "Company"
+      WHERE id IN (SELECT "companyId" FROM "User" WHERE id = auth.uid())
+    )
+  );
+
+-- Seul le candidat peut voir ses candidatures
+ALTER TABLE "Application" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "applicant_own_applications" ON "Application"
+  FOR ALL USING ("userId" = auth.uid());
+```
+
+---
+
+## Commandes Prisma — Workflow
+
+```bash
+# Setup initial
+bunx prisma init
+
+# Après modification du schéma
+bunx prisma migrate dev --name "add_ai_generation"
+
+# Production
+bunx prisma migrate deploy
+
+# Visualiser les données
+bunx prisma studio
+
+# Synchroniser les types TypeScript
+bunx prisma generate
+
+# Seed données de test
+bunx prisma db seed
+```
+
+---
+
+## Couche d'accès données — Structure
+
+```
+lib/
+├── db/
+│   ├── prisma.ts           # Singleton PrismaClient
+│   └── queries/
+│       ├── jobs.ts         # getJobs(), getJob(), createJob()...
+│       ├── companies.ts    # getCompany(), createCompany()...
+│       ├── users.ts        # getUser(), updateUser()...
+│       ├── applications.ts # getApplications(), createApplication()...
+│       └── documents.ts    # getDocuments(), createDocument()...
+```
+
+### Exemple de query typée
+
+```typescript
+// lib/db/queries/jobs.ts
+import { prisma } from '@/lib/db/prisma';
+import type { Job, Prisma } from '@prisma/client';
+
+export interface JobFilters {
+  type?: string[];
+  level?: CareerLevel[];
+  remote?: boolean;
+  search?: string;
+  page?: number;
+  perPage?: number;
+}
+
+export async function getJobs(filters: JobFilters = {}) {
+  const { type, level, remote, search, page = 1, perPage = 25 } = filters;
+
+  const where: Prisma.JobWhereInput = {
+    status: 'ACTIVE',
+    ...(type?.length && { type: { in: type as any } }),
+    ...(remote && { workplaceType: 'REMOTE' }),
+    ...(search && {
+      OR: [
+        { title: { contains: search, mode: 'insensitive' } },
+        { company: { name: { contains: search, mode: 'insensitive' } } },
+        { workplaceCity: { contains: search, mode: 'insensitive' } },
+      ],
+    }),
+  };
+
+  const [jobs, total] = await Promise.all([
+    prisma.job.findMany({
+      where,
+      include: {
+        company: { select: { name: true, logo: true, slug: true } },
+        careerLevels: true,
+        languages: true,
+      },
+      orderBy: [
+        { featured: 'desc' },
+        { postedDate: 'desc' },
+      ],
+      take: perPage,
+      skip: (page - 1) * perPage,
+    }),
+    prisma.job.count({ where }),
+  ]);
+
+  return { jobs, total, pages: Math.ceil(total / perPage) };
+}
+```
+
+---
+
+## Migration depuis Airtable (si nécessaire)
+
+```typescript
+// scripts/migrate-from-airtable.ts
+import { getJobs } from '@/lib/db/airtable.server';
+import { prisma } from '@/lib/db/prisma';
+import { slugify } from '@/lib/utils/slugify';
+
+async function migrate() {
+  const airtableJobs = await getJobs();
+
+  for (const job of airtableJobs) {
+    const company = await prisma.company.upsert({
+      where: { slug: slugify(job.company) },
+      create: { name: job.company, slug: slugify(job.company) },
+      update: {},
+    });
+
+    await prisma.job.create({
+      data: {
+        title: job.title,
+        slug: `${slugify(job.title)}-at-${slugify(job.company)}`,
+        type: mapJobType(job.type),
+        status: 'ACTIVE',
+        description: job.description,
+        applyUrl: job.apply_url,
+        postedDate: new Date(job.posted_date),
+        companyId: company.id,
+        salaryMin: job.salary?.min ?? undefined,
+        salaryMax: job.salary?.max ?? undefined,
+        salaryCurrency: job.salary?.currency ?? 'EUR',
+        workplaceType: mapWorkplace(job.workplace_type),
+        workplaceCity: job.workplace_city,
+        workplaceCountry: job.workplace_country,
+        careerLevels: {
+          create: job.career_level.map((l) => ({ level: mapLevel(l) })),
+        },
+        languages: {
+          create: job.languages.map((lang) => ({ language: lang })),
+        },
+      },
+    });
+  }
+
+  console.log(`Migrated ${airtableJobs.length} jobs`);
+}
+
+migrate().catch(console.error).finally(() => prisma.$disconnect());
+```

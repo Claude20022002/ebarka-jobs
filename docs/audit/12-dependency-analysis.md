@@ -1,233 +1,349 @@
-# Analyse des Dépendances
+# Analyse des Dépendances — Stack cible
 
 ## Vue d'ensemble
 
 ```
-Total dépendances : 32 production + 11 dev = 43 packages
-Package manager   : Bun 1.x
-Lock file         : bun.lock (présent — reproducible builds)
-TypeScript        : v5.9.3 (latest stable)
-Next.js           : v15.5.7 (latest)
-React             : v19.1.2 (latest)
+Package manager : Bun 1.x
+TypeScript      : v5.x (strict)
+Next.js         : v15 (App Router) — voir note version
+React           : v19
 ```
+
+> **Note version Next.js :** La spec indique v14 mais le codebase actuel tourne sur v15.5. Next.js 15 est supérieur (React 19, Turbopack stable, meilleures perfs). Recommandation : rester sur v15 sauf contrainte explicite.
 
 ---
 
-## Dépendances de production — Analyse détaillée
+## Dépendances de production — Stack cible complète
 
 ### Framework & Runtime
 
-| Package | Version | Usage | Critique | Problème |
-|---------|---------|-------|---------|---------|
-| `next` | ^15.5.7 | Framework principal | Oui | Aucun |
-| `react` | ^19.1.2 | UI runtime | Oui | Aucun |
-| `react-dom` | ^19.1.2 | DOM renderer | Oui | Aucun |
-
-**Note :** React 19 + Next.js 15 sont les versions les plus récentes. Certains packages tiers peuvent ne pas encore être compatibles React 19.
+| Package | Version | Rôle | Statut |
+|---------|---------|------|--------|
+| `next` | ^15.x | Framework principal | Conserver |
+| `react` | ^19.x | UI runtime | Conserver |
+| `react-dom` | ^19.x | DOM renderer | Conserver |
 
 ---
 
-### UI & Design System
+### Base de données
 
-| Package | Version | Usage | Critique | Problème |
-|---------|---------|-------|---------|---------|
-| `@radix-ui/react-accordion` | ^1.2.12 | Accordéon FAQ | Oui | Aucun |
-| `@radix-ui/react-avatar` | ^1.1.10 | Avatar entreprise | Non | Aucun |
-| `@radix-ui/react-checkbox` | ^1.3.3 | Filtres | Oui | Aucun |
-| `@radix-ui/react-dropdown-menu` | ^2.1.16 | Menus | Non | Aucun |
-| `@radix-ui/react-label` | ^2.1.7 | Labels form | Oui | Aucun |
-| `@radix-ui/react-select` | ^2.2.6 | Selects | Oui | Aucun |
-| `@radix-ui/react-slot` | ^1.2.3 | Composition | Oui | Aucun |
-| `@radix-ui/react-switch` | ^1.2.6 | Toggle | Non | Aucun |
-| `@radix-ui/react-toast` | ^1.2.15 | Notifications | Oui | Aucun |
-| `class-variance-authority` | ^0.7.1 | Variants CSS | Oui | Aucun |
-| `clsx` | ^2.1.1 | Classes cond. | Oui | Aucun |
-| `tailwind-merge` | ^3.3.1 | Merge Tailwind | Oui | Aucun |
-| `lucide-react` | ^0.542.0 | Icônes | Oui | Aucun |
-| `tailwindcss-animate` | ^1.0.7 | Animations | Non | Peut être inliné |
+| Package | Version | Rôle | Action |
+|---------|---------|------|--------|
+| `@prisma/client` | ^5.x | Client ORM typé | Ajouter |
+| `prisma` | ^5.x | CLI migrations | Ajouter (dev) |
+| `airtable` | ^0.12.2 | SDK Airtable | Supprimer après migration |
 
----
-
-### Fonts
-
-| Package | Version | Usage | Critique | Problème |
-|---------|---------|-------|---------|---------|
-| `geist` | ^1.4.2 | Font Geist | Oui | OK (next/font compatible) |
-| `@fontsource/ibm-plex-serif` | ^5.2.6 | Font titres | Oui | ⚠️ Non optimisé (voir rapport UI) |
-| `@fontsource/inter` | ^5.2.6 | Font corps | Oui | ⚠️ Non optimisé |
-
-**Action :** Migrer vers `next/font/google` et supprimer `@fontsource/*`.
-
----
-
-### Backend / Data
-
-| Package | Version | Usage | Critique | Problème |
-|---------|---------|-------|---------|---------|
-| `airtable` | ^0.12.2 | SDK Airtable | Oui | ⚠️ Non compatible Edge runtime |
-| `axios` | ^1.11.0 | HTTP client | Oui* | ⚠️ Utilisé uniquement dans encharge.ts — remplaçable par fetch |
-| `node-fetch` | ^3.3.2 | HTTP fetch polyfill | Non | ❌ Inutile (Next.js 15 = fetch global natif) |
-| `dotenv` | ^17.2.1 | Env variables | Non | ❌ Inutile (Next.js charge .env automatiquement) |
-
-**Packages à supprimer :** `node-fetch`, `dotenv`
-**Package à remplacer :** `axios` → `fetch` natif dans `encharge.ts`
-
----
-
-### Email
-
-| Package | Version | Usage | Critique | Problème |
-|---------|---------|-------|---------|---------|
-| (via axios) | — | HTTP vers Encharge | Oui | À migrer vers fetch |
-
----
-
-### Markdown & Contenu
-
-| Package | Version | Usage | Critique | Problème |
-|---------|---------|-------|---------|---------|
-| `react-markdown` | ^10.1.0 | Rendu descriptions | Oui | ⚠️ ~80KB — à lazy-loader |
-| `remark-breaks` | ^4.0.0 | Plugin remark | Oui | Dépendance de react-markdown |
-| `remark-gfm` | ^4.0.1 | GitHub Flavored MD | Oui | Dépendance de react-markdown |
-| `remark-parse` | ^11.0.0 | Parser markdown | Oui | Pour normalizeMarkdown() |
-| `remark-stringify` | ^11.0.0 | Sérialiser markdown | Oui | Pour normalizeMarkdown() |
-| `unified` | ^11.0.5 | Pipeline markdown | Oui | Requis par remark |
-
-**Note :** La chaîne `remark-parse → unified → remark-stringify` dans `normalizeMarkdown()` est lourde pour une simple normalisation. Vérifier si une regex simple suffirait.
-
----
-
-### SEO & Feeds
-
-| Package | Version | Usage | Critique | Problème |
-|---------|---------|-------|---------|---------|
-| `schema-dts` | ^1.1.5 | Types Schema.org | Oui | Excellent choix |
-| `feed` | ^5.1.0 | Génération RSS/Atom/JSON | Oui | Aucun |
-
----
-
-### État & Routing
-
-| Package | Version | Usage | Critique | Problème |
-|---------|---------|-------|---------|---------|
-| `nuqs` | ^2.5.2 | URL State management | Oui | Excellent choix pour Next.js |
-
----
-
-### Utilitaires
-
-| Package | Version | Usage | Critique | Problème |
-|---------|---------|-------|---------|---------|
-| `date-fns` | ^4.1.0 | Formatage dates | Oui | ⚠️ ~30KB — vérifier si toutes les fonctions sont utilisées |
-
----
-
-## Dépendances de développement
-
-| Package | Version | Usage | Problème |
-|---------|---------|-------|---------|
-| `@biomejs/biome` | 2.2.2 | Linter/Formatter | Aucun |
-| `@tailwindcss/forms` | ^0.5.10 | Plugin forms | Aucun |
-| `@tailwindcss/typography` | ^0.5.16 | Plugin prose | Aucun |
-| `@types/airtable` | ^0.10.5 | Types Airtable | Aucun |
-| `@types/node` | ^22.18.0 | Types Node.js | Aucun |
-| `@types/react` | ^19.1.12 | Types React | Aucun |
-| `@types/react-dom` | ^19.1.9 | Types ReactDOM | Aucun |
-| `autoprefixer` | ^10.4.21 | CSS vendor prefixes | Aucun |
-| `postcss` | ^8.5.6 | CSS processing | Aucun |
-| `tailwindcss` | ^3.4.17 | CSS framework | Aucun |
-| `typescript` | 5.9.3 | Type checking | Aucun |
-| `ultracite` | ^5.2.17 | Wrapper Biome | Voir note |
-
-**Note sur `ultracite` :** C'est un wrapper autour de Biome avec des règles pré-configurées. Peu documenté publiquement. Si des problèmes surviennent, envisager d'utiliser Biome directement.
-
----
-
-## Dépendances manquantes (recommandées)
-
-### Sécurité & Robustesse
 ```bash
-bun add zod                              # Validation de schéma
-bun add @upstash/ratelimit @upstash/redis  # Rate limiting distribué
+bun add @prisma/client
+bun add -D prisma
 ```
 
-### Tests
+---
+
+### Authentification
+
+| Package | Version | Rôle | Action |
+|---------|---------|------|--------|
+| `next-auth` | ^5.x (beta) | Auth sessions JWT | Ajouter |
+| `@auth/prisma-adapter` | ^1.x | Adapter BDD Prisma | Ajouter |
+
 ```bash
-bun add -D vitest @vitejs/plugin-react
-bun add -D @testing-library/react @testing-library/user-event
-bun add -D jsdom
-bun add -D playwright  # Tests e2e (optionnel pour l'instant)
+bun add next-auth@beta @auth/prisma-adapter
 ```
+
+---
+
+### Intelligence Artificielle
+
+| Package | Version | Rôle | Action |
+|---------|---------|------|--------|
+| `@anthropic-ai/sdk` | ^0.x | Claude API (CV, LM) | Ajouter |
+
+```bash
+bun add @anthropic-ai/sdk
+```
+
+Variables d'env :
+```bash
+ANTHROPIC_API_KEY=sk-ant-xxxx
+```
+
+Usage pattern :
+```typescript
+// lib/ai/claude.ts
+import Anthropic from '@anthropic-ai/sdk';
+
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+export async function generateCoverLetter(cvText: string, jobDescription: string) {
+  const message = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 1024,
+    messages: [
+      {
+        role: 'user',
+        content: `Génère une lettre de motivation professionnelle basée sur ce CV et cette offre d'emploi.
+        
+CV : ${cvText}
+Offre : ${jobDescription}`,
+      },
+    ],
+  });
+  return message.content[0].type === 'text' ? message.content[0].text : '';
+}
+```
+
+---
+
+### Upload de fichiers
+
+| Package | Version | Rôle | Action |
+|---------|---------|------|--------|
+| `cloudinary` | ^2.x | SDK upload/transformation | Ajouter |
+| `next-cloudinary` | ^6.x | Composants Next.js | Ajouter |
+
+```bash
+bun add cloudinary next-cloudinary
+```
+
+Variables d'env :
+```bash
+CLOUDINARY_CLOUD_NAME=xxx
+CLOUDINARY_API_KEY=xxx
+CLOUDINARY_API_SECRET=xxx
+NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=xxx
+```
+
+---
+
+### Emails
+
+| Package | Version | Rôle | Action |
+|---------|---------|------|--------|
+| `resend` | ^3.x | Service d'envoi email | Ajouter |
+| `@react-email/components` | ^0.x | Composants templates | Ajouter |
+| `react-email` | ^3.x | Preview CLI | Ajouter (dev) |
+| `axios` | ^1.x | HTTP client Encharge | Supprimer |
+
+```bash
+bun add resend @react-email/components
+bun add -D react-email
+```
+
+Variables d'env :
+```bash
+RESEND_API_KEY=re_xxxx
+EMAIL_FROM=noreply@ebarka-jobs.com
+```
+
+Usage :
+```typescript
+// lib/email/resend.ts
+import { Resend } from 'resend';
+import { JobAlertEmail } from '@/emails/job-alert';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+export async function sendJobAlert(to: string, jobs: Job[]) {
+  await resend.emails.send({
+    from: process.env.EMAIL_FROM!,
+    to,
+    subject: 'Nouvelles offres pour vous',
+    react: JobAlertEmail({ jobs }),
+  });
+}
+```
+
+---
+
+### Paiements (futur — Phase 2)
+
+| Package | Version | Rôle | Action |
+|---------|---------|------|--------|
+| `stripe` | ^16.x | Paiements + webhooks | Ajouter Phase 2 |
+| `@stripe/stripe-js` | ^4.x | Client-side Stripe | Ajouter Phase 2 |
+
+```bash
+bun add stripe @stripe/stripe-js
+```
+
+Variables d'env :
+```bash
+STRIPE_SECRET_KEY=sk_live_xxx
+STRIPE_WEBHOOK_SECRET=whsec_xxx
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_xxx
+```
+
+---
 
 ### Monitoring
+
+| Package | Version | Rôle | Action |
+|---------|---------|------|--------|
+| `@sentry/nextjs` | ^8.x | Error tracking + traces | Ajouter |
+
 ```bash
-bun add @sentry/nextjs   # Error tracking
+bun add @sentry/nextjs
+bunx @sentry/wizard@latest -i nextjs  # Setup automatique
 ```
 
-### Futur SaaS
+Variables d'env :
 ```bash
-bun add next-auth@beta @auth/prisma-adapter  # Auth
-bun add @prisma/client                        # ORM
-bun add -D prisma                             # CLI Prisma
-bun add stripe                               # Paiements
+SENTRY_DSN=https://xxx@sentry.io/xxx
+SENTRY_ORG=ebarka
+SENTRY_PROJECT=ebarka-jobs
+```
+
+Vercel Analytics est activé dans le dashboard Vercel — pas de package requis.
+
+---
+
+### Rate Limiting
+
+| Package | Version | Rôle | Action |
+|---------|---------|------|--------|
+| `@upstash/ratelimit` | ^2.x | Rate limiting distribué | Ajouter |
+| `@upstash/redis` | ^1.x | Redis serverless | Ajouter |
+
+```bash
+bun add @upstash/ratelimit @upstash/redis
+```
+
+Variables d'env :
+```bash
+UPSTASH_REDIS_REST_URL=https://xxx.upstash.io
+UPSTASH_REDIS_REST_TOKEN=xxx
 ```
 
 ---
 
-## Matrice des risques de dépendances
+### Validation
 
-| Risque | Package(s) | Niveau | Mitigation |
-|--------|----------|--------|-----------|
-| Incompatibilité React 19 | Radix UI, nuqs | Faible | Toutes sont compatibles React 19 |
-| EOL / abandon | `node-fetch`, `dotenv` | Moyen | Supprimer (inutiles) |
-| Lock-in fournisseur | `airtable` SDK | Haut | Plan de migration PostgreSQL |
-| Taille bundle | `react-markdown`, `date-fns` | Moyen | Tree-shaking, lazy loading |
-| Non-compatible Edge | `airtable` SDK | Haut | Utiliser fetch() directement dans les Edge routes |
-| Sécurité dépendances | Toutes | Variable | Lancer `bun audit` régulièrement |
-
----
-
-## Audit de sécurité des dépendances
+| Package | Version | Rôle | Action |
+|---------|---------|------|--------|
+| `zod` | ^3.x | Validation schéma TypeScript | Ajouter |
 
 ```bash
-# Commande à lancer
-bun audit
-
-# Résultats attendus (estimés)
-# airtable@0.12.2 : Vérifier les CVEs connues
-# axios@1.11.0 : Vérifier les CVEs (historique de vulnérabilités SSRF)
-```
-
-**Recommandation :** Configurer Dependabot ou Renovate Bot pour les mises à jour automatiques :
-
-```yaml
-# .github/dependabot.yml
-version: 2
-updates:
-  - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    groups:
-      radix-ui:
-        patterns: ["@radix-ui/*"]
-      next-ecosystem:
-        patterns: ["next", "react", "react-dom"]
+bun add zod
 ```
 
 ---
 
-## Résumé des actions
+### UI & Design System (conserver)
 
-| Action | Priorité | Effort |
-|--------|---------|--------|
-| Supprimer `node-fetch` | P1 | 15min |
-| Supprimer `dotenv` | P1 | 15min |
-| Remplacer `axios` par `fetch` | P1 | 1h |
-| Migrer `@fontsource` vers `next/font` | P1 | 2h |
-| Ajouter `zod` | P1 | Dépend validation |
-| Ajouter `@upstash/ratelimit` | P1 | 2h |
-| Ajouter `vitest` | P2 | 1h setup |
-| Configurer Dependabot | P2 | 30min |
-| Ajouter `@sentry/nextjs` | P2 | 2h |
-| Lancer `bun audit` | P1 | 5min |
+| Package | Statut |
+|---------|--------|
+| `@radix-ui/react-*` | Conserver tout |
+| `class-variance-authority` | Conserver |
+| `clsx` + `tailwind-merge` | Conserver |
+| `lucide-react` | Conserver |
+| `tailwindcss-animate` | Conserver |
+| `nuqs` | Conserver |
+
+---
+
+### Fonts (migration)
+
+| Package | Action |
+|---------|--------|
+| `@fontsource/inter` | Supprimer → `next/font/google` |
+| `@fontsource/ibm-plex-serif` | Supprimer → `next/font/google` |
+| `geist` | Conserver (compatible `next/font`) |
+
+---
+
+### Packages à supprimer
+
+| Package | Raison |
+|---------|--------|
+| `airtable` | Remplacé par Prisma + PostgreSQL |
+| `axios` | Remplacé par `fetch` natif + Resend SDK |
+| `node-fetch` | Inutile — `fetch` global natif dans Next.js 15 |
+| `dotenv` | Inutile — Next.js charge `.env` automatiquement |
+| `@fontsource/inter` | Remplacé par `next/font/google` |
+| `@fontsource/ibm-plex-serif` | Remplacé par `next/font/google` |
+
+```bash
+bun remove airtable axios node-fetch dotenv @fontsource/inter @fontsource/ibm-plex-serif
+```
+
+---
+
+### Tests
+
+| Package | Rôle | Action |
+|---------|------|--------|
+| `vitest` | Test runner | Ajouter |
+| `@vitejs/plugin-react` | Plugin React | Ajouter |
+| `@testing-library/react` | Tests composants | Ajouter |
+| `@testing-library/user-event` | Simulations user | Ajouter |
+| `jsdom` | DOM virtuel | Ajouter |
+| `@playwright/test` | Tests e2e | Ajouter (Phase 2) |
+
+```bash
+bun add -D vitest @vitejs/plugin-react @testing-library/react @testing-library/user-event jsdom
+```
+
+---
+
+## Tableau récapitulatif des actions
+
+| Action | Packages | Priorité |
+|--------|---------|---------|
+| Ajouter BDD | `@prisma/client`, `prisma` | P0 |
+| Ajouter Auth | `next-auth`, `@auth/prisma-adapter` | P0 |
+| Ajouter Email | `resend`, `@react-email/components` | P0 |
+| Ajouter IA | `@anthropic-ai/sdk` | P0 |
+| Ajouter Upload | `cloudinary`, `next-cloudinary` | P0 |
+| Ajouter Monitoring | `@sentry/nextjs` | P1 |
+| Ajouter Validation | `zod` | P1 |
+| Ajouter Rate limit | `@upstash/ratelimit`, `@upstash/redis` | P1 |
+| Supprimer obsolètes | `airtable`, `axios`, `node-fetch`, `dotenv` | P1 |
+| Migrer fonts | Supprimer `@fontsource/*` | P2 |
+| Ajouter Tests | `vitest`, `@testing-library/react` | P2 |
+| Ajouter Paiements | `stripe` | P2 (Phase 2) |
+| Automatiser updates | Dependabot / Renovate | P2 |
+
+---
+
+## `.env.local` complet cible
+
+```bash
+# === BASE DE DONNÉES ===
+DATABASE_URL="postgresql://..."
+DIRECT_URL="postgresql://..."
+
+# === AUTH (NextAuth.js v5) ===
+NEXTAUTH_SECRET="random-32-char-string"
+NEXTAUTH_URL="https://ebarka-jobs.com"
+GOOGLE_CLIENT_ID="xxx.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="xxx"
+
+# === IA ===
+ANTHROPIC_API_KEY="sk-ant-xxx"
+
+# === UPLOAD ===
+CLOUDINARY_CLOUD_NAME="xxx"
+CLOUDINARY_API_KEY="xxx"
+CLOUDINARY_API_SECRET="xxx"
+NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME="xxx"
+
+# === EMAIL ===
+RESEND_API_KEY="re_xxx"
+EMAIL_FROM="noreply@ebarka-jobs.com"
+
+# === RATE LIMITING ===
+UPSTASH_REDIS_REST_URL="https://xxx.upstash.io"
+UPSTASH_REDIS_REST_TOKEN="xxx"
+
+# === MONITORING ===
+SENTRY_DSN="https://xxx@sentry.io/xxx"
+
+# === APP ===
+NEXT_PUBLIC_APP_URL="https://ebarka-jobs.com"
+
+# === PAIEMENTS (Phase 2) ===
+STRIPE_SECRET_KEY="sk_live_xxx"
+STRIPE_WEBHOOK_SECRET="whsec_xxx"
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_live_xxx"
+```
