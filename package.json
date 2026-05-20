@@ -9,19 +9,19 @@
     "lint": "bunx ultracite check",
     "format": "bunx ultracite format",
     "type-check": "tsc --noEmit",
-    "db:generate": "bunx prisma generate",
-    "db:migrate": "bunx prisma migrate dev",
-    "db:migrate:prod": "bunx prisma migrate deploy",
-    "db:push": "bunx prisma db push",
-    "db:studio": "bunx prisma studio",
-    "db:seed": "bun run prisma/seed.ts",
-    "db:reset": "bunx prisma migrate reset --force",
-    "docker:up": "docker-compose up -d",
-    "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f postgres",
-    "docker:reset": "docker-compose down -v && docker-compose up -d",
-    "docker:status": "docker-compose ps",
-    "setup": "bun install && docker-compose up -d && bunx prisma migrate dev && bun run db:seed"
+    "db:generate": "npx prisma generate",
+    "db:migrate": "npx prisma migrate dev",
+    "db:migrate:prod": "npx prisma migrate deploy",
+    "db:push": "npx prisma db push",
+    "db:studio": "npx prisma studio",
+    "db:seed": "npx tsx prisma/seed.ts",
+    "db:reset": "npx prisma migrate reset --force",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f postgres",
+    "docker:reset": "docker compose down -v && docker compose up -d",
+    "docker:status": "docker compose ps",
+    "setup": "npm install && docker compose up -d && npx prisma migrate dev && npx prisma db seed"
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",
@@ -61,7 +61,7 @@
     "unified": "^11.0.5"
   },
   "prisma": {
-    "seed": "bun run prisma/seed.ts"
+    "seed": "npx tsx prisma/seed.ts"
   },
   "devDependencies": {
     "prisma": "^6.0.0",
