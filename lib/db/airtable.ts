@@ -6,6 +6,12 @@ import {
 import type { LanguageCode } from '@/lib/constants/languages';
 import type { RemoteRegion, WorkplaceType } from '@/lib/constants/workplace';
 
+const K_DIVISOR = 1_000;
+const M_DIVISOR = 1_000_000;
+const TRAILING_ZERO_REGEX = /\.0$/;
+const SALARY_K_THRESHOLD = 10_000;
+const SALARY_M_THRESHOLD = 1_000_000;
+
 export type CareerLevel =
   | 'Internship'
   | 'EntryLevel'
