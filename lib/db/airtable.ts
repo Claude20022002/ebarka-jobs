@@ -6,7 +6,7 @@ import {
 import type { LanguageCode } from '@/lib/constants/languages';
 import type { RemoteRegion, WorkplaceType } from '@/lib/constants/workplace';
 
-const K_DIVISOR = 1_000;
+const K_DIVISOR = 1000;
 const M_DIVISOR = 1_000_000;
 const TRAILING_ZERO_REGEX = /\.0$/;
 const SALARY_K_THRESHOLD = 10_000;
@@ -103,18 +103,18 @@ export function formatSalary(
 
     // Apply forced scale if provided (for consistent range formatting)
     if (forceScale === 'M') {
-      return `${(num / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+      return `${(num / M_DIVISOR).toFixed(1).replace(TRAILING_ZERO_REGEX, '')}M`;
     }
     if (forceScale === 'k') {
-      return `${(num / 1000).toFixed(0)}k`;
+      return `${(num / K_DIVISOR).toFixed(0)}k`;
     }
 
     // Format with appropriate scale based on magnitude
     if (num >= mThreshold) {
-      return `${(num / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+      return `${(num / M_DIVISOR).toFixed(1).replace(TRAILING_ZERO_REGEX, '')}M`;
     }
     if (num >= kThreshold) {
-      return `${(num / 1000).toFixed(0)}k`;
+      return `${(num / K_DIVISOR).toFixed(0)}k`;
     }
 
     // For smaller numbers, show the full value with thousands separator
@@ -122,15 +122,16 @@ export function formatSalary(
   };
 
   // Handle single value cases (only min or only max)
-  let range;
+  let range = '';
   if (salary.min && salary.max) {
     // Determine the appropriate scale for both values based on the larger number
     let forceScale: 'k' | 'M' | undefined;
 
     // Use consistent thresholds for all currencies
-    if (Math.max(salary.min, salary.max) >= 1_000_000) {
+    const maxSalary = Math.max(salary.min, salary.max);
+    if (maxSalary >= SALARY_M_THRESHOLD) {
       forceScale = 'M'; // Force both values to use millions
-    } else if (Math.max(salary.min, salary.max) >= 10_000) {
+    } else if (maxSalary >= SALARY_K_THRESHOLD) {
       forceScale = 'k'; // Force both values to use thousands
     }
 
