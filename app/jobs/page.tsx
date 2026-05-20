@@ -25,7 +25,7 @@ import {
   formatLocationTitle,
 } from '@/lib/constants/locations';
 import type { CareerLevel } from '@/lib/db/airtable';
-import { getJobs } from '@/lib/db/airtable.server';
+import { getJobs } from '@/lib/db/queries/jobs';
 import { resolveColor } from '@/lib/utils/colors';
 import { generateMetadata } from '@/lib/utils/metadata';
 
@@ -103,7 +103,7 @@ function CategoryCard({ href, title, count }: CategoryCardProps) {
 }
 
 export default async function JobsDirectoryPage() {
-  const jobs = await getJobs();
+  const { jobs } = await getJobs({ perPage: 100 });
 
   // Aggregate job counts by different dimensions
   const jobCounts = jobs.reduce<JobCounts>(

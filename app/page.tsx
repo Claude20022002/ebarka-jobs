@@ -36,20 +36,32 @@ function getSearchParam(
   return searchParams[key] ?? null;
 }
 
+function getSingleSearchParam(
+  searchParams: Record<string, string | string[] | undefined>,
+  key: string
+): string | null {
+  const value = searchParams[key];
+  if (Array.isArray(value)) {
+    return value.at(0) ?? null;
+  }
+
+  return value ?? null;
+}
+
 function buildJobFilters(
   searchParams: Record<string, string | string[] | undefined>
 ): JobFilters {
   return {
-    q: getSearchParam(searchParams, 'q'),
+    q: getSingleSearchParam(searchParams, 'q'),
     type: getSearchParam(searchParams, 'types'),
     level: getSearchParam(searchParams, 'roles'),
-    remote: getSearchParam(searchParams, 'remote'),
+    remote: getSingleSearchParam(searchParams, 'remote'),
     salary: getSearchParam(searchParams, 'salary'),
-    visa: getSearchParam(searchParams, 'visa'),
+    visa: getSingleSearchParam(searchParams, 'visa'),
     language: getSearchParam(searchParams, 'languages'),
-    page: getSearchParam(searchParams, 'page'),
-    perPage: getSearchParam(searchParams, 'per_page'),
-    sort: getSearchParam(searchParams, 'sort'),
+    page: getSingleSearchParam(searchParams, 'page'),
+    perPage: getSingleSearchParam(searchParams, 'per_page'),
+    sort: getSingleSearchParam(searchParams, 'sort'),
   };
 }
 

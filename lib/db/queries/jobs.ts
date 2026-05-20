@@ -385,9 +385,12 @@ function buildWhere(filters: JobFilters): Prisma.JobWhereInput {
   }
 
   if (salaryRanges.length > 0) {
-    where.AND = [...(where.AND ? toArrayWhere(where.AND) : []), {
-      OR: salaryRanges,
-    }];
+    where.AND = [
+      ...(where.AND ? toArrayWhere(where.AND) : []),
+      {
+        OR: salaryRanges,
+      },
+    ];
   }
 
   if (parseBoolean(filters.visa)) {

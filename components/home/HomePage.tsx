@@ -1,8 +1,8 @@
 'use client';
 
 import { formatDistanceToNow, isToday } from 'date-fns';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useMemo } from 'react';
 import { JobCard } from '@/components/jobs/JobCard';
 import { HeroSection } from '@/components/ui/hero-section';
 import { JobFilters } from '@/components/ui/job-filters';
@@ -14,20 +14,7 @@ import { SortOrderSelect } from '@/components/ui/sort-order-select';
 import config from '@/config';
 import type { LanguageCode } from '@/lib/constants/languages';
 import type { CareerLevel, Job } from '@/lib/db/airtable';
-import { normalizeAnnualSalary } from '@/lib/db/airtable';
-import { useJobSearch } from '@/lib/hooks/useJobSearch';
 import { usePagination } from '@/lib/hooks/usePagination';
-import { useSortOrder } from '@/lib/hooks/useSortOrder';
-import { filterJobsBySearch } from '@/lib/utils/filter-jobs';
-
-type Filters = {
-  types: string[];
-  roles: CareerLevel[];
-  remote: boolean;
-  salaryRanges: string[];
-  visa: boolean;
-  languages: LanguageCode[];
-};
 
 type FilterType =
   | 'type'
@@ -39,12 +26,27 @@ type FilterType =
   | 'clear';
 type FilterValue = string[] | boolean | CareerLevel[] | LanguageCode[] | true;
 
-function HomePageContent({ initialJobs }: { initialJobs: Job[] }) {
-  const router = useRouter();
+type HomePageContentProps = {
+  initialJobs: Job[];
+  filterJobs: Job[];
+  totalJobs: number;
+  totalFilteredJobs: number;
+  jobsAddedToday: number;
+  page: number;
+  perPage: number;
+};
+
+function HomePageContent({
+  initialJobs,
+  filterJobs,
+  totalJobs,
+  totalFilteredJobs,
+  jobsAddedToday,
+  page,
+  perPage,
+}: HomePageContentProps) {
   const searchParams = useSearchParams();
-  const { searchTerm } = useJobSearch();
-  const { sortOrder } = useSortOrder();
-  const { page } = usePagination();
+  const { setPage } = usePagination();
 
   // Parse initial filters from URL
   const initialFilters = {
@@ -58,308 +60,32 @@ function HomePageContent({ initialJobs }: { initialJobs: Job[] }) {
       []) as LanguageCode[],
   };
 
-  const [filters, setFilters] = useState<Filters>({
-    types: initialFilters?.types || [],
-    roles: initialFilters?.roles || [],
-    remote: initialFilters?.remote,
-    salaryRanges: initialFilters?.salaryRanges || [],
-    visa: initialFilters?.visa,
-    languages: initialFilters?.languages || ([] as LanguageCode[]),
-  });
-  const [pendingUrlUpdate, setPendingUrlUpdate] = useState<Record<
-    string,
-    string | null
-  > | null>(null);
-
-  // Get jobs per page from URL or default
-  const jobsPerPage = Number.parseInt(searchParams.get('per_page') || '10', 10);
-
-  // Update URL with new parameters
-  const updateParams = useCallback((updates: Record<string, string | null>) => {
-    setPendingUrlUpdate(updates);
-  }, []);
-
-  // Handle URL updates
-  useEffect(() => {
-    if (pendingUrlUpdate) {
-      const params = new URLSearchParams(searchParams);
-
-      Object.entries(pendingUrlUpdate).forEach(([key, value]) => {
-        if (value === null) {
-          params.delete(key);
-        } else {
-          params.set(key, value);
-        }
-      });
-
-      router.replace(`/?${params.toString()}`, { scroll: false });
-      setPendingUrlUpdate(null);
-    }
-  }, [pendingUrlUpdate, router, searchParams]);
-
-  // Update URL when filters change
-  const updateFilterParams = useCallback(
-    (newFilters: Filters) => {
-      const updates: Record<string, string | null> = {
-        types: newFilters.types.length ? newFilters.types.join(',') : null,
-        roles: newFilters.roles.length ? newFilters.roles.join(',') : null,
-        remote: newFilters.remote ? 'true' : null,
-        salary: newFilters.salaryRanges.length
-          ? newFilters.salaryRanges.join(',')
-          : null,
-        visa: newFilters.visa ? 'true' : null,
-        languages: newFilters.languages.length
-          ? newFilters.languages.join(',')
-          : null,
-        page: '1', // Reset to first page when filters change
-      };
-
-      updateParams(updates);
-    },
-    [updateParams]
-  );
-
   const handleFilterChange = useCallback(
-    (filterType: FilterType, value: FilterValue) => {
-      if (filterType === 'clear') {
-        const clearedFilters = {
-          types: [],
-          roles: [] as CareerLevel[],
-          remote: false,
-          salaryRanges: [],
-          visa: false,
-          languages: [],
-        };
-        setFilters(clearedFilters);
-        updateFilterParams(clearedFilters);
-        return;
-      }
-
-      setFilters((prev) => {
-        const newFilters = { ...prev };
-
-        switch (filterType) {
-          case 'type':
-            if (
-              Array.isArray(value) &&
-              JSON.stringify(value) !== JSON.stringify(prev.types)
-            ) {
-              newFilters.types = value;
-            } else {
-              return prev;
-            }
-            break;
-          case 'role':
-            if (
-              Array.isArray(value) &&
-              JSON.stringify(value) !== JSON.stringify(prev.roles)
-            ) {
-              newFilters.roles = value as CareerLevel[];
-            } else {
-              return prev;
-            }
-            break;
-          case 'remote':
-            if (typeof value === 'boolean' && value !== prev.remote) {
-              newFilters.remote = value;
-            } else {
-              return prev;
-            }
-            break;
-          case 'salary':
-            if (
-              Array.isArray(value) &&
-              JSON.stringify(value) !== JSON.stringify(prev.salaryRanges)
-            ) {
-              newFilters.salaryRanges = value;
-            } else {
-              return prev;
-            }
-            break;
-          case 'visa':
-            if (typeof value === 'boolean' && value !== prev.visa) {
-              newFilters.visa = value;
-            } else {
-              return prev;
-            }
-            break;
-          case 'language':
-            if (
-              Array.isArray(value) &&
-              JSON.stringify(value) !== JSON.stringify(prev.languages)
-            ) {
-              newFilters.languages = value as LanguageCode[];
-            } else {
-              return prev;
-            }
-            break;
-        }
-
-        updateFilterParams(newFilters);
-        return newFilters;
-      });
+    (_filterType: FilterType, _value: FilterValue) => {
+      setPage(null);
     },
-    [updateFilterParams]
+    [setPage]
   );
-
-  // Sort and filter jobs
-  const filteredJobs = useMemo(() => {
-    let filtered = [...initialJobs];
-
-    // Apply search filter using our utility function
-    filtered = filterJobsBySearch(filtered, searchTerm || '');
-
-    // Apply job type filter
-    if (filters.types.length > 0) {
-      filtered = filtered.filter((job) => filters.types.includes(job.type));
-    }
-
-    // Apply career level filter
-    if (filters.roles.length > 0) {
-      filtered = filtered.filter((job) => {
-        if (!job.career_level) {
-          return false;
-        }
-        return filters.roles.some((role) => job.career_level.includes(role));
-      });
-    }
-
-    // Apply remote filter
-    if (filters.remote) {
-      filtered = filtered.filter((job) => job.workplace_type === 'Remote');
-    }
-
-    // Apply visa sponsorship filter
-    if (filters.visa) {
-      filtered = filtered.filter((job) => job.visa_sponsorship === 'Yes');
-    }
-
-    // Apply salary range filter
-    if (filters.salaryRanges.length > 0) {
-      filtered = filtered.filter((job) => {
-        if (!job.salary) {
-          return false;
-        }
-        const annualSalary = normalizeAnnualSalary(job.salary);
-
-        return filters.salaryRanges.some((range) => {
-          switch (range) {
-            case '< $50K':
-              return annualSalary < 50_000;
-            case '$50K - $100K':
-              return annualSalary >= 50_000 && annualSalary <= 100_000;
-            case '$100K - $200K':
-              return annualSalary > 100_000 && annualSalary <= 200_000;
-            case '> $200K':
-              return annualSalary > 200_000;
-            default:
-              return false;
-          }
-        });
-      });
-    }
-
-    // Apply language filter
-    if (filters.languages.length > 0) {
-      filtered = filtered.filter((job) => {
-        if (!job.languages || job.languages.length === 0) {
-          return false;
-        }
-        return filters.languages.some((lang) => job.languages.includes(lang));
-      });
-    }
-
-    // Apply sorting
-    switch (sortOrder) {
-      case 'oldest':
-        filtered.sort(
-          (a, b) =>
-            new Date(a.posted_date).getTime() -
-            new Date(b.posted_date).getTime()
-        );
-        break;
-      case 'salary':
-        filtered.sort((a, b) => {
-          const salaryA = a.salary ? normalizeAnnualSalary(a.salary) : -1;
-          const salaryB = b.salary ? normalizeAnnualSalary(b.salary) : -1;
-
-          if (salaryA === -1 && salaryB === -1) {
-            return 0;
-          }
-          if (salaryA === -1) {
-            return 1;
-          }
-          if (salaryB === -1) {
-            return -1;
-          }
-          return salaryB - salaryA;
-        });
-        break;
-      default: // "newest"
-        filtered.sort(
-          (a, b) =>
-            new Date(b.posted_date).getTime() -
-            new Date(a.posted_date).getTime()
-        );
-    }
-
-    return filtered;
-  }, [initialJobs, searchTerm, sortOrder, filters]);
-
-  // Sort jobs based on selected option and featured status
-  const sortedJobs = useMemo(() => {
-    // First sort by featured status, then by the selected sort option
-    return [...filteredJobs].sort((a, b) => {
-      // First compare by featured status
-      if (a.featured !== b.featured) {
-        return a.featured ? -1 : 1;
-      }
-
-      // Then apply the selected sort for jobs with the same featured status
-      switch (sortOrder) {
-        case 'newest':
-          return (
-            new Date(b.posted_date).getTime() -
-            new Date(a.posted_date).getTime()
-          );
-        case 'oldest':
-          return (
-            new Date(a.posted_date).getTime() -
-            new Date(b.posted_date).getTime()
-          );
-        case 'salary': {
-          const aSalary = a.salary ? normalizeAnnualSalary(a.salary) : 0;
-          const bSalary = b.salary ? normalizeAnnualSalary(b.salary) : 0;
-          return bSalary - aSalary;
-        }
-        default:
-          return 0;
-      }
-    });
-  }, [filteredJobs, sortOrder]);
-
-  // Calculate pagination
-  const startIndex = (page - 1) * jobsPerPage;
-  const paginatedJobs = sortedJobs.slice(startIndex, startIndex + jobsPerPage);
 
   // Get the most recent job's posted date (timestamp or null)
   const lastUpdatedTimestamp = useMemo(() => {
-    if (initialJobs.length === 0) {
+    if (filterJobs.length === 0) {
       return null;
     }
 
     const mostRecentDate = Math.max(
-      ...initialJobs.map((job) => new Date(job.posted_date).getTime())
+      ...filterJobs.map((job) => new Date(job.posted_date).getTime())
     );
 
     return mostRecentDate; // Return the timestamp
-  }, [initialJobs]);
+  }, [filterJobs]);
 
   // Calculate jobs added today
-  const jobsAddedToday = useMemo(() => {
-    return initialJobs.filter((job) => isToday(new Date(job.posted_date)))
-      .length;
-  }, [initialJobs]);
+  const fallbackJobsAddedToday = useMemo(
+    () => filterJobs.filter((job) => isToday(new Date(job.posted_date))).length,
+    [filterJobs]
+  );
+  const displayedJobsAddedToday = jobsAddedToday || fallbackJobsAddedToday;
 
   return (
     <main className="min-h-screen bg-background">
@@ -399,21 +125,21 @@ function HomePageContent({ initialJobs }: { initialJobs: Job[] }) {
                   {(config.quickStats?.sections?.openJobs
                     ?.showNewJobsIndicator ??
                     true) &&
-                    jobsAddedToday > 0 && (
+                    displayedJobsAddedToday > 0 && (
                       <span className="pulse-dot mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
                     )}
                   <span /* Value inherits color from parent div */>
-                    {initialJobs.length.toLocaleString()}
+                    {totalJobs.toLocaleString()}
                   </span>
                   {(config.quickStats?.sections?.openJobs
                     ?.showNewJobsIndicator ??
                     true) &&
-                    jobsAddedToday > 0 && (
+                    displayedJobsAddedToday > 0 && (
                       <span
                         className="ml-1"
                         /* Added today text inherits color */
                       >
-                        ({jobsAddedToday.toLocaleString()} added today)
+                        ({displayedJobsAddedToday.toLocaleString()} added today)
                       </span>
                     )}
                 </div>
@@ -457,7 +183,7 @@ function HomePageContent({ initialJobs }: { initialJobs: Job[] }) {
                   {config.quickStats?.sections?.trending?.title || 'Trending'}
                 </div>
                 <div /* Value inherits color */>
-                  {Array.from(new Set(initialJobs.map((job) => job.company)))
+                  {Array.from(new Set(filterJobs.map((job) => job.company)))
                     .slice(
                       0,
                       config.quickStats?.sections?.trending?.maxCompanies || 3
@@ -486,8 +212,8 @@ function HomePageContent({ initialJobs }: { initialJobs: Job[] }) {
                   )}
                 </h2>
                 <p className="text-muted-foreground text-sm">
-                  Showing {paginatedJobs.length.toLocaleString()} of{' '}
-                  {sortedJobs.length.toLocaleString()} positions
+                  Showing {initialJobs.length.toLocaleString()} of{' '}
+                  {totalFilteredJobs.toLocaleString()} positions
                 </p>
               </div>
               <div className="flex w-full items-center justify-between gap-3 overflow-x-auto pb-1 sm:w-auto sm:justify-end">
@@ -497,7 +223,7 @@ function HomePageContent({ initialJobs }: { initialJobs: Job[] }) {
             </div>
 
             <div className="space-y-4">
-              {paginatedJobs.length === 0 ? (
+              {initialJobs.length === 0 ? (
                 <div className="py-8 text-center">
                   <p className="text-muted-foreground text-sm">
                     No positions found matching your search criteria. Try
@@ -505,15 +231,15 @@ function HomePageContent({ initialJobs }: { initialJobs: Job[] }) {
                   </p>
                 </div>
               ) : (
-                paginatedJobs.map((job) => <JobCard job={job} key={job.id} />)
+                initialJobs.map((job) => <JobCard job={job} key={job.id} />)
               )}
             </div>
 
             {/* Pagination with optimized range */}
-            {sortedJobs.length > jobsPerPage && (
+            {totalFilteredJobs > perPage && (
               <PaginationControl
-                itemsPerPage={jobsPerPage}
-                totalItems={sortedJobs.length}
+                itemsPerPage={perPage}
+                totalItems={totalFilteredJobs}
               />
             )}
 
@@ -528,7 +254,7 @@ function HomePageContent({ initialJobs }: { initialJobs: Job[] }) {
             <div className="space-y-6">
               <JobFilters
                 initialFilters={initialFilters}
-                jobs={initialJobs}
+                jobs={filterJobs}
                 onFilterChange={handleFilterChange}
               />
               {/* Post Job Banner - Desktop only */}
@@ -543,10 +269,12 @@ function HomePageContent({ initialJobs }: { initialJobs: Job[] }) {
   );
 }
 
-export function HomePage({ initialJobs }: { initialJobs: Job[] }) {
+export type HomePageProps = HomePageContentProps;
+
+export function HomePage(props: HomePageProps) {
   return (
     <Suspense>
-      <HomePageContent initialJobs={initialJobs} />
+      <HomePageContent {...props} />
     </Suspense>
   );
 }
