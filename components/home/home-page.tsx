@@ -26,6 +26,8 @@ type FilterType =
   | 'clear';
 type FilterValue = string[] | boolean | CareerLevel[] | LanguageCode[] | true;
 
+const DEFAULT_TRENDING_COMPANY_COUNT = 3;
+
 type HomePageContentProps = {
   initialJobs: Job[];
   filterJobs: Job[];
@@ -36,6 +38,7 @@ type HomePageContentProps = {
   perPage: number;
 };
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This component preserves the existing homepage layout while server-side filtering is introduced.
 function HomePageContent({
   initialJobs,
   filterJobs,
@@ -186,7 +189,8 @@ function HomePageContent({
                   {Array.from(new Set(filterJobs.map((job) => job.company)))
                     .slice(
                       0,
-                      config.quickStats?.sections?.trending?.maxCompanies || 3
+                      config.quickStats?.sections?.trending?.maxCompanies ||
+                        DEFAULT_TRENDING_COMPANY_COUNT
                     )
                     .join(', ')}
                 </div>

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { HomePage } from '@/components/home/HomePage';
+import { HomePage } from '@/components/home/home-page';
 import config from '@/config';
 import { getJobStats, getJobs, type JobFilters } from '@/lib/db/queries/jobs';
 import { generateMetadata } from '@/lib/utils/metadata';

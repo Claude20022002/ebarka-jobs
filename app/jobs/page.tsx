@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Script from 'next/script';
 import type { ItemList, ListItem, WithContext } from 'schema-dts';
 import { Button } from '@/components/ui/button';
 import { HeroSection } from '@/components/ui/hero-section';
@@ -60,6 +59,8 @@ type JobCounts = {
   languages: Record<LanguageCode, number>;
 };
 
+type DirectoryJob = Awaited<ReturnType<typeof getJobs>>['jobs'][number];
+
 type CategoryCardProps = {
   href: string;
   title: string;
@@ -102,58 +103,69 @@ function CategoryCard({ href, title, count }: CategoryCardProps) {
   );
 }
 
+function createEmptyJobCounts(): JobCounts {
+  return {
+    types: {},
+    careerLevels: {} as Record<CareerLevel, number>,
+    locations: {
+      countries: {},
+      cities: {},
+      remote: 0,
+    },
+    languages: {} as Record<LanguageCode, number>,
+  };
+}
+
+function addTypeCount(counts: JobCounts, job: DirectoryJob) {
+  if (job.type) {
+    counts.types[job.type] = (counts.types[job.type] || 0) + 1;
+  }
+}
+
+function addCareerLevelCounts(counts: JobCounts, job: DirectoryJob) {
+  for (const level of job.career_level) {
+    if (level !== 'NotSpecified') {
+      counts.careerLevels[level] = (counts.careerLevels[level] || 0) + 1;
+    }
+  }
+}
+
+function addLocationCounts(counts: JobCounts, job: DirectoryJob) {
+  if (job.workplace_country) {
+    const country = job.workplace_country as Country;
+    counts.locations.countries[country] =
+      (counts.locations.countries[country] || 0) + 1;
+  }
+
+  if (job.workplace_city) {
+    counts.locations.cities[job.workplace_city] =
+      (counts.locations.cities[job.workplace_city] || 0) + 1;
+  }
+
+  if (job.workplace_type === 'Remote') {
+    counts.locations.remote += 1;
+  }
+}
+
+function addLanguageCounts(counts: JobCounts, job: DirectoryJob) {
+  for (const lang of job.languages) {
+    counts.languages[lang] = (counts.languages[lang] || 0) + 1;
+  }
+}
+
+function addJobToCounts(counts: JobCounts, job: DirectoryJob): JobCounts {
+  addTypeCount(counts, job);
+  addCareerLevelCounts(counts, job);
+  addLocationCounts(counts, job);
+  addLanguageCounts(counts, job);
+  return counts;
+}
+
 export default async function JobsDirectoryPage() {
   const { jobs } = await getJobs({ perPage: 100 });
 
   // Aggregate job counts by different dimensions
-  const jobCounts = jobs.reduce<JobCounts>(
-    (acc, job) => {
-      // Count by type (skip undefined)
-      if (job.type) {
-        acc.types[job.type] = (acc.types[job.type] || 0) + 1;
-      }
-
-      // Count by career level (skip NotSpecified)
-      for (const level of job.career_level) {
-        if (level !== 'NotSpecified') {
-          acc.careerLevels[level] = (acc.careerLevels[level] || 0) + 1;
-        }
-      }
-
-      // Count by location
-      if (job.workplace_country) {
-        const country = job.workplace_country as Country;
-        acc.locations.countries[country] =
-          (acc.locations.countries[country] || 0) + 1;
-      }
-      if (job.workplace_city) {
-        acc.locations.cities[job.workplace_city] =
-          (acc.locations.cities[job.workplace_city] || 0) + 1;
-      }
-      if (job.workplace_type === 'Remote') {
-        acc.locations.remote += 1;
-      }
-
-      // Count by language
-      if (job.languages) {
-        for (const lang of job.languages) {
-          acc.languages[lang] = (acc.languages[lang] || 0) + 1;
-        }
-      }
-
-      return acc;
-    },
-    {
-      types: {},
-      careerLevels: {} as Record<CareerLevel, number>,
-      locations: {
-        countries: {},
-        cities: {},
-        remote: 0,
-      },
-      languages: {} as Record<LanguageCode, number>,
-    }
-  );
+  const jobCounts = jobs.reduce(addJobToCounts, createEmptyJobCounts());
 
   // Sort and filter job types to ensure consistent order
   const sortedJobTypes = Object.entries(jobCounts.types)
@@ -218,11 +230,9 @@ export default async function JobsDirectoryPage() {
   return (
     <>
       {/* Add schema markup */}
-      <Script
-        dangerouslySetInnerHTML={{ __html: generateItemListSchema() }}
-        id="item-list-schema"
-        type="application/ld+json"
-      />
+      <script id="item-list-schema" type="application/ld+json">
+        {generateItemListSchema()}
+      </script>
 
       <HeroSection
         badge="Job Categories"
