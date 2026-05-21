@@ -10,7 +10,7 @@ const TERMINAL_STATUSES = new Set(['REJECTED', 'WITHDRAWN', 'OFFER']);
 
 export const withdrawApplication = async (applicationId: string): Promise<void> => {
   const user = await getSession();
-  if (!user || !hasRole(user, 'CANDIDATE', 'ADMIN')) {
+  if (!(user && hasRole(user, 'CANDIDATE', 'ADMIN'))) {
     throw new Error('Authentification requise.');
   }
 
@@ -42,7 +42,7 @@ export const withdrawApplication = async (applicationId: string): Promise<void> 
 
 export const unsaveJob = async (savedJobId: string): Promise<void> => {
   const user = await getSession();
-  if (!user || !hasRole(user, 'CANDIDATE', 'ADMIN')) {
+  if (!(user && hasRole(user, 'CANDIDATE', 'ADMIN'))) {
     throw new Error('Authentification requise.');
   }
 

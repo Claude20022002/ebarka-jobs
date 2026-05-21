@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { Bookmark, ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, Bookmark } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth/session';
@@ -28,6 +28,16 @@ const WORKPLACE_LABELS: Record<string, string> = {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
+const savedJobCountLabel = (count: number): string => {
+  if (count === 0) {
+    return 'Aucune offre sauvegardée.';
+  }
+  if (count === 1) {
+    return '1 offre sauvegardée';
+  }
+  return `${count} offres sauvegardées`;
+};
+
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
@@ -40,7 +50,7 @@ function EmptyState() {
         Les offres que vous sauvegardez apparaîtront ici.
       </p>
       <Link
-        className="mt-4 text-sm underline underline-offset-4 hover:text-foreground text-muted-foreground"
+        className="mt-4 text-muted-foreground text-sm underline underline-offset-4 hover:text-foreground"
         href="/jobs"
       >
         Parcourir les offres
@@ -69,13 +79,13 @@ function SavedJobRow({ savedJob }: SavedJobRowProps) {
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            className="font-medium text-sm hover:underline underline-offset-4 truncate"
+            className="truncate font-medium text-sm underline-offset-4 hover:underline"
             href={`/jobs/${job.slug}`}
           >
             {job.title}
           </Link>
           {isExpired && (
-            <span className="inline-flex shrink-0 items-center rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-600">
+            <span className="inline-flex shrink-0 items-center rounded bg-amber-50 px-2 py-0.5 font-medium text-amber-600 text-xs">
               Offre expirée
             </span>
           )}
@@ -98,7 +108,7 @@ function SavedJobRow({ savedJob }: SavedJobRowProps) {
         {!isExpired && (
           <Link
             aria-label={`Voir l'offre ${job.title}`}
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground underline underline-offset-4"
+            className="inline-flex items-center gap-1 text-muted-foreground text-xs underline underline-offset-4 hover:text-foreground"
             href={`/jobs/${job.slug}`}
           >
             Voir l&apos;offre
@@ -125,15 +135,11 @@ export default async function SavedJobsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">
+        <h1 className="font-semibold text-xl tracking-tight">
           Offres sauvegardées
         </h1>
         <p className="mt-1 text-muted-foreground text-sm">
-          {total === 0
-            ? 'Aucune offre sauvegardée.'
-            : total === 1
-              ? '1 offre sauvegardée'
-              : `${total} offres sauvegardées`}
+          {savedJobCountLabel(total)}
         </p>
       </div>
 

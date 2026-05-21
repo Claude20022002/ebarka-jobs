@@ -2,10 +2,10 @@ import { format } from 'date-fns';
 import { ArrowUpRight, Briefcase } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { cn } from '@/lib/utils';
 import { getSession } from '@/lib/auth/session';
 import type { ApplicationItem } from '@/lib/db/queries/profile';
 import { getApplications } from '@/lib/db/queries/profile';
+import { cn } from '@/lib/utils';
 import { WithdrawButton } from './_withdraw-button';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -15,10 +15,7 @@ const MS_PER_HOUR = 3_600_000;
 const WITHDRAW_WINDOW_HOURS = 24;
 const TERMINAL_STATUSES = new Set(['REJECTED', 'WITHDRAWN', 'OFFER']);
 
-const STATUS_CONFIG: Record<
-  string,
-  { label: string; className: string }
-> = {
+const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   PENDING: {
     label: 'En attente',
     className: 'bg-slate-100 text-slate-600',
@@ -56,14 +53,26 @@ const JOB_TYPE_LABELS: Record<string, string> = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const statusConfig = (status: string) =>
-  STATUS_CONFIG[status] ?? { label: status, className: 'bg-slate-100 text-slate-600' };
+  STATUS_CONFIG[status] ?? {
+    label: status,
+    className: 'bg-slate-100 text-slate-600',
+  };
+
+const applicationCountLabel = (count: number): string => {
+  if (count === 0) {
+    return 'Aucune candidature pour le moment.';
+  }
+  if (count === 1) {
+    return '1 candidature envoyée';
+  }
+  return `${count} candidatures envoyées`;
+};
 
 const canWithdraw = (application: ApplicationItem): boolean => {
   if (TERMINAL_STATUSES.has(application.status)) {
     return false;
   }
-  const elapsed =
-    (Date.now() - application.createdAt.getTime()) / MS_PER_HOUR;
+  const elapsed = (Date.now() - application.createdAt.getTime()) / MS_PER_HOUR;
   return elapsed < WITHDRAW_WINDOW_HOURS;
 };
 
@@ -81,7 +90,7 @@ function EmptyState() {
         Vos candidatures envoyées apparaîtront ici.
       </p>
       <Link
-        className="mt-4 text-sm underline underline-offset-4 hover:text-foreground text-muted-foreground"
+        className="mt-4 text-muted-foreground text-sm underline underline-offset-4 hover:text-foreground"
         href="/jobs"
       >
         Parcourir les offres
@@ -109,14 +118,14 @@ function ApplicationRow({ application }: ApplicationRowProps) {
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            className="font-medium text-sm hover:underline underline-offset-4 truncate"
+            className="truncate font-medium text-sm underline-offset-4 hover:underline"
             href={`/jobs/${job.slug}`}
           >
             {job.title}
           </Link>
           <span
             className={cn(
-              'inline-flex shrink-0 items-center rounded px-2 py-0.5 text-xs font-medium',
+              'inline-flex shrink-0 items-center rounded px-2 py-0.5 font-medium text-xs',
               status.className
             )}
           >
@@ -139,7 +148,7 @@ function ApplicationRow({ application }: ApplicationRowProps) {
       <div className="flex shrink-0 items-center gap-2">
         <Link
           aria-label={`Voir l'offre ${job.title}`}
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground underline underline-offset-4"
+          className="inline-flex items-center gap-1 text-muted-foreground text-xs underline underline-offset-4 hover:text-foreground"
           href={`/jobs/${job.slug}`}
         >
           Voir l&apos;offre
@@ -165,13 +174,9 @@ export default async function ApplicationsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Candidatures</h1>
+        <h1 className="font-semibold text-xl tracking-tight">Candidatures</h1>
         <p className="mt-1 text-muted-foreground text-sm">
-          {total === 0
-            ? 'Aucune candidature pour le moment.'
-            : total === 1
-              ? '1 candidature envoyée'
-              : `${total} candidatures envoyées`}
+          {applicationCountLabel(total)}
         </p>
       </div>
 

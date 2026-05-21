@@ -20,7 +20,7 @@ export function ProfileNav({ userName, items }: ProfileNavProps) {
 
   return (
     <nav aria-label="Navigation du profil">
-      <p className="mb-4 truncate text-sm text-muted-foreground">{userName}</p>
+      <p className="mb-4 truncate text-muted-foreground text-sm">{userName}</p>
 
       <ul className="space-y-0.5">
         {items.map((item) => {

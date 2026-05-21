@@ -1,12 +1,9 @@
 import { format } from 'date-fns';
-import { Briefcase, Bookmark, FileText, User } from 'lucide-react';
+import { Bookmark, Briefcase, FileText, User } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth/session';
-import {
-  getProfileCounts,
-  getProfileUser,
-} from '@/lib/db/queries/profile';
+import { getProfileCounts, getProfileUser } from '@/lib/db/queries/profile';
 
 const STAT_DATE_FORMAT = 'd MMM yyyy';
 
@@ -27,7 +24,7 @@ function StatCard({ href, icon: Icon, label, value }: StatCardProps) {
         <Icon aria-hidden="true" className="h-5 w-5 text-muted-foreground" />
       </span>
       <div>
-        <p className="text-2xl font-semibold tabular-nums">{value}</p>
+        <p className="font-semibold text-2xl tabular-nums">{value}</p>
         <p className="text-muted-foreground text-sm">{label}</p>
       </div>
     </Link>
@@ -53,7 +50,7 @@ export default async function ProfilePage() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Mon profil</h1>
+        <h1 className="font-semibold text-xl tracking-tight">Mon profil</h1>
         <p className="mt-1 text-muted-foreground text-sm">
           Membre depuis le {format(user.createdAt, STAT_DATE_FORMAT)}
         </p>
@@ -76,7 +73,7 @@ export default async function ProfilePage() {
 
       {/* Stats */}
       <div>
-        <h2 className="mb-3 font-medium text-sm text-muted-foreground uppercase tracking-wide">
+        <h2 className="mb-3 font-medium text-muted-foreground text-sm uppercase tracking-wide">
           Activité
         </h2>
         <div className="grid gap-3 sm:grid-cols-3">
@@ -89,7 +86,11 @@ export default async function ProfilePage() {
           <StatCard
             href="/profile/saved-jobs"
             icon={Bookmark}
-            label={counts.savedJobs === 1 ? 'Offre sauvegardée' : 'Offres sauvegardées'}
+            label={
+              counts.savedJobs === 1
+                ? 'Offre sauvegardée'
+                : 'Offres sauvegardées'
+            }
             value={counts.savedJobs}
           />
           <StatCard
