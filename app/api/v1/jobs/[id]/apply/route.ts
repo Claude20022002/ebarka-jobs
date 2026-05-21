@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import type { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import {
   badRequest,
@@ -32,10 +33,12 @@ const fetchJobForApply = async (jobId: string): Promise<JobForApply | null> =>
     select: { id: true, status: true, applyInApp: true, companyId: true },
   });
 
+type EligibilityIssue = 'not_found' | 'no_inapp' | 'own_company';
+
 const checkJobEligibility = (
   job: JobForApply | null,
   userCompanyId: string | null
-): string | null => {
+): EligibilityIssue | null => {
   if (!job || job.status !== 'ACTIVE') {
     return 'not_found';
   }
@@ -46,6 +49,33 @@ const checkJobEligibility = (
     return 'own_company';
   }
   return null;
+};
+
+const eligibilityResponse = (
+  issue: EligibilityIssue
+): ReturnType<typeof NextResponse.json> => {
+  if (issue === 'not_found') {
+    return notFound('Job');
+  }
+  if (issue === 'no_inapp') {
+    return badRequest('This job does not accept in-app applications.');
+  }
+  return forbidden();
+};
+
+const applicationErrorResponse = (
+  error: unknown
+): ReturnType<typeof NextResponse.json> => {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+    return internalError();
+  }
+  if (error.code === 'P2002') {
+    return conflict('You have already applied to this position.');
+  }
+  if (error.code === 'P2003') {
+    return badRequest('One or more documents were not found.');
+  }
+  return internalError();
 };
 
 // POST /api/v1/jobs/[id]/apply — submit a candidature (CANDIDATE only)
@@ -68,15 +98,8 @@ export const POST = async (request: NextRequest, context: RouteContext) => {
   const { id: jobId } = await context.params;
   const job = await fetchJobForApply(jobId);
   const issue = checkJobEligibility(job, user.companyId);
-
-  if (issue === 'not_found') {
-    return notFound('Job');
-  }
-  if (issue === 'no_inapp') {
-    return badRequest('This job does not accept in-app applications.');
-  }
-  if (issue === 'own_company') {
-    return forbidden();
+  if (issue !== null) {
+    return eligibilityResponse(issue);
   }
 
   let body: unknown;
@@ -112,18 +135,6 @@ export const POST = async (request: NextRequest, context: RouteContext) => {
 
     return created(application);
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2002'
-    ) {
-      return conflict('You have already applied to this position.');
-    }
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2003'
-    ) {
-      return badRequest('One or more documents were not found.');
-    }
-    return internalError();
+    return applicationErrorResponse(error);
   }
 };

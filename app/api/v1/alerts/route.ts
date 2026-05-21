@@ -39,7 +39,12 @@ export const POST = async (request: NextRequest) => {
 
   try {
     const alert = await prisma.jobAlert.create({
-      data: { name, email, filters: filters ?? null, active: true },
+      data: {
+        name,
+        email,
+        active: true,
+        ...(filters !== undefined && { filters }),
+      },
       select: { id: true, email: true, name: true, active: true, createdAt: true },
     });
 
