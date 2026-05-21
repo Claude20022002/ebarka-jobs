@@ -1,8 +1,6 @@
-import { Prisma } from '@prisma/client';
 import type { NextRequest } from 'next/server';
 import {
   badRequest,
-  conflict,
   created,
   internalError,
   tooManyRequests,
@@ -11,7 +9,8 @@ import { alertsRateLimit } from '@/lib/rate-limit';
 import { prisma } from '@/lib/db/prisma';
 import { CreateAlertSchema } from '@/lib/validations/alert';
 
-const RETRY_AFTER_SECONDS = 3_600;
+// 1 hour — matches the alertsRateLimit window
+const RETRY_AFTER_SECONDS = 3600;
 
 // POST /api/v1/alerts — subscribe to job alerts (public, rate-limited per IP)
 export const POST = async (request: NextRequest) => {
@@ -31,35 +30,21 @@ export const POST = async (request: NextRequest) => {
 
   const parsed = CreateAlertSchema.safeParse(body);
   if (!parsed.success) {
-    return badRequest(parsed.error.issues.at(0)?.message ?? 'Invalid request body.');
+    return badRequest(
+      parsed.error.issues.at(0)?.message ?? 'Invalid request body.'
+    );
   }
 
   const { name, email, filters } = parsed.data;
 
   try {
     const alert = await prisma.jobAlert.create({
-      data: {
-        name,
-        email,
-        filters: filters ?? Prisma.JsonNull,
-        active: true,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        active: true,
-        createdAt: true,
-      },
+      data: { name, email, filters: filters ?? null, active: true },
+      select: { id: true, email: true, name: true, active: true, createdAt: true },
     });
 
     return created(alert);
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2002') {
-        return conflict('An alert for this email already exists.');
-      }
-    }
+  } catch {
     return internalError();
   }
 };

@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import type { JobType, CareerLevel, WorkplaceType, VisaStatus } from '@prisma/client';
+import type { CareerLevel, JobType, VisaStatus, WorkplaceType } from '@prisma/client';
 import type { NextRequest } from 'next/server';
 import {
   badRequest,
@@ -16,73 +16,82 @@ import { prisma } from '@/lib/db/prisma';
 import { mutationRateLimit, publicRateLimit } from '@/lib/rate-limit';
 import { buildPaginationMeta } from '@/lib/validations/shared';
 import {
-  CreateJobSchema,
   CAREER_LEVELS,
+  CreateJobSchema,
   JOB_TYPES,
+  type JobQueryInput,
   JobQuerySchema,
 } from '@/lib/validations/job';
 import { generateJobSlug } from '@/lib/utils/slugify';
 
 const RETRY_AFTER_SECONDS = 60;
+const BASE36 = 36;
 
 const getClientIp = (request: NextRequest) =>
   request.headers.get('x-forwarded-for')?.split(',').at(0)?.trim() ?? 'unknown';
 
+// ── Ordering ────────────────────────────────────────────────────────────────
+
 const buildOrderBy = (
-  sort: 'newest' | 'oldest' | 'salary_desc'
+  sort: JobQueryInput['sort']
 ): Prisma.JobOrderByWithRelationInput[] => {
-  switch (sort) {
-    case 'oldest':
-      return [{ featured: 'desc' }, { postedDate: 'asc' }];
-    case 'salary_desc':
-      return [
-        { featured: 'desc' },
-        { salaryMax: { sort: 'desc', nulls: 'last' } },
-      ];
-    default:
-      return [{ featured: 'desc' }, { postedDate: 'desc' }];
+  if (sort === 'oldest') {
+    return [{ featured: 'desc' }, { postedDate: 'asc' }];
   }
+  if (sort === 'salary_desc') {
+    return [{ featured: 'desc' }, { salaryMax: { sort: 'desc', nulls: 'last' } }];
+  }
+  return [{ featured: 'desc' }, { postedDate: 'desc' }];
 };
 
-const buildWhereClause = (
-  query: ReturnType<typeof JobQuerySchema.parse>
-): Prisma.JobWhereInput => {
-  const { q, type, level, remote, visa, featured } = query;
+// ── Filter helpers ───────────────────────────────────────────────────────────
 
-  const types = type
-    ? type
-        .split(',')
-        .filter((t): t is JobType =>
-          (JOB_TYPES as readonly string[]).includes(t)
-        )
-    : undefined;
+const parseJobTypes = (type: string | undefined): JobType[] | undefined => {
+  if (!type) {
+    return;
+  }
+  const parsed = type
+    .split(',')
+    .filter((t): t is JobType => (JOB_TYPES as readonly string[]).includes(t));
+  return parsed.length ? parsed : undefined;
+};
 
-  const levels = level
-    ? level
-        .split(',')
-        .filter((l): l is CareerLevel =>
-          (CAREER_LEVELS as readonly string[]).includes(l)
-        )
-    : undefined;
+const parseCareerLevels = (
+  level: string | undefined
+): CareerLevel[] | undefined => {
+  if (!level) {
+    return;
+  }
+  const parsed = level
+    .split(',')
+    .filter((l): l is CareerLevel =>
+      (CAREER_LEVELS as readonly string[]).includes(l)
+    );
+  return parsed.length ? parsed : undefined;
+};
+
+const buildWhereClause = (query: JobQueryInput): Prisma.JobWhereInput => {
+  const types = parseJobTypes(query.type);
+  const levels = parseCareerLevels(query.level);
 
   return {
     status: 'ACTIVE',
-    ...(q && {
+    ...(query.q && {
       OR: [
-        { title: { contains: q, mode: 'insensitive' } },
-        { company: { name: { contains: q, mode: 'insensitive' } } },
-        { workplaceCity: { contains: q, mode: 'insensitive' } },
+        { title: { contains: query.q, mode: 'insensitive' } },
+        { company: { name: { contains: query.q, mode: 'insensitive' } } },
+        { workplaceCity: { contains: query.q, mode: 'insensitive' } },
       ],
     }),
-    ...(types?.length && { type: { in: types } }),
-    ...(levels?.length && {
-      careerLevels: { some: { level: { in: levels } } },
-    }),
-    ...(remote === 'true' && { workplaceType: 'REMOTE' as WorkplaceType }),
-    ...(visa === 'true' && { visaSponsorship: 'YES' as VisaStatus }),
-    ...(featured === 'true' && { featured: true }),
+    ...(types && { type: { in: types } }),
+    ...(levels && { careerLevels: { some: { level: { in: levels } } } }),
+    ...(query.remote === 'true' && { workplaceType: 'REMOTE' as WorkplaceType }),
+    ...(query.visa === 'true' && { visaSponsorship: 'YES' as VisaStatus }),
+    ...(query.featured === 'true' && { featured: true }),
   };
 };
+
+// ── Select shape ─────────────────────────────────────────────────────────────
 
 const JOB_LIST_SELECT = {
   id: true,
@@ -103,12 +112,24 @@ const JOB_LIST_SELECT = {
   postedDate: true,
   validThrough: true,
   viewCount: true,
-  company: {
-    select: { id: true, name: true, slug: true, logo: true },
-  },
+  company: { select: { id: true, name: true, slug: true, logo: true } },
   careerLevels: { select: { level: true } },
   languages: { select: { language: true } },
 } satisfies Prisma.JobSelect;
+
+// ── Company resolution ────────────────────────────────────────────────────────
+
+import type { SessionUser } from '@/lib/auth/session';
+
+const resolveCompanyId = (user: SessionUser, body: unknown): string | null => {
+  if (user.role !== 'ADMIN') {
+    return user.companyId;
+  }
+  const raw = (body as Record<string, unknown>).companyId;
+  return typeof raw === 'string' ? raw : user.companyId;
+};
+
+// ── Handlers ─────────────────────────────────────────────────────────────────
 
 // GET /api/v1/jobs — paginated public list of active jobs
 export const GET = async (request: NextRequest) => {
@@ -121,23 +142,23 @@ export const GET = async (request: NextRequest) => {
   const params = Object.fromEntries(request.nextUrl.searchParams);
   const parsed = JobQuerySchema.safeParse(params);
   if (!parsed.success) {
-    return badRequest(parsed.error.issues.at(0)?.message ?? 'Invalid query parameters.');
+    return badRequest(
+      parsed.error.issues.at(0)?.message ?? 'Invalid query parameters.'
+    );
   }
 
   const { page, per_page: perPage, sort } = parsed.data;
-  const where = buildWhereClause(parsed.data);
-  const orderBy = buildOrderBy(sort);
 
   try {
     const [jobs, total] = await Promise.all([
       prisma.job.findMany({
-        where,
+        where: buildWhereClause(parsed.data),
         select: JOB_LIST_SELECT,
-        orderBy,
+        orderBy: buildOrderBy(sort),
         take: perPage,
         skip: (page - 1) * perPage,
       }),
-      prisma.job.count({ where }),
+      prisma.job.count({ where: buildWhereClause(parsed.data) }),
     ]);
 
     return paginated(jobs, buildPaginationMeta(page, perPage, total));
@@ -155,8 +176,12 @@ export const POST = async (request: NextRequest) => {
   }
 
   const user = await getSession();
-  if (!user) return unauthorized();
-  if (!hasRole(user, 'EMPLOYER', 'ADMIN')) return forbidden();
+  if (!user) {
+    return unauthorized();
+  }
+  if (!hasRole(user, 'EMPLOYER', 'ADMIN')) {
+    return forbidden();
+  }
 
   let body: unknown;
   try {
@@ -167,23 +192,19 @@ export const POST = async (request: NextRequest) => {
 
   const parsed = CreateJobSchema.safeParse(body);
   if (!parsed.success) {
-    return badRequest(parsed.error.issues.at(0)?.message ?? 'Invalid request body.');
+    return badRequest(
+      parsed.error.issues.at(0)?.message ?? 'Invalid request body.'
+    );
   }
 
   const data = parsed.data;
 
-  // Resolve the company for this job
-  const companyId =
-    user.role === 'ADMIN'
-      ? ((body as Record<string, unknown>).companyId as string | undefined) ??
-        user.companyId
-      : user.companyId;
+  const companyId = resolveCompanyId(user, body);
 
   if (!companyId) {
     return badRequest('No company associated with this account.');
   }
 
-  // Verify company exists
   const company = await prisma.company.findUnique({
     where: { id: companyId },
     select: { id: true, name: true },
@@ -192,10 +213,7 @@ export const POST = async (request: NextRequest) => {
     return badRequest('Company not found.');
   }
 
-  // Generate a unique slug (base-36 timestamp suffix ensures uniqueness)
-  const slug = `${generateJobSlug(data.title, company.name)}-${Date.now().toString(36)}`;
-
-  // ADMIN can publish directly; employers create in PENDING state
+  const slug = `${generateJobSlug(data.title, company.name)}-${Date.now().toString(BASE36)}`;
   const status = user.role === 'ADMIN' ? 'ACTIVE' : 'PENDING';
 
   try {
@@ -229,29 +247,19 @@ export const POST = async (request: NextRequest) => {
         occupationalCategory: data.occupationalCategory,
         industry: data.industry,
         companyId,
-        careerLevels: {
-          create: data.careerLevels.map((level) => ({ level })),
-        },
-        languages: {
-          create: data.languages.map((language) => ({ language })),
-        },
+        careerLevels: { create: data.careerLevels.map((level) => ({ level })) },
+        languages: { create: data.languages.map((language) => ({ language })) },
       },
-      select: {
-        id: true,
-        slug: true,
-        title: true,
-        status: true,
-        type: true,
-        companyId: true,
-      },
+      select: { id: true, slug: true, title: true, status: true, type: true, companyId: true },
     });
 
     return created(job);
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2002') {
-        return conflict('A job with this slug already exists.');
-      }
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      return conflict('A job with this slug already exists.');
     }
     return internalError();
   }

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const COVER_LETTER_MAX = 5_000;
+const COVER_LETTER_MAX = 5000;
 const MESSAGE_MAX = 300;
 const DOCUMENT_ID_MAX_COUNT = 5;
 

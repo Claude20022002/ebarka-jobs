@@ -53,13 +53,14 @@ const TITLE_MIN = 5;
 const TITLE_MAX = 200;
 const DESCRIPTION_MIN = 50;
 const DESCRIPTION_MAX = 10_000;
-const TEXT_FIELD_MAX = 2_000;
+const TEXT_FIELD_MAX = 2000;
 const LOCATION_MAX = 100;
 const CURRENCY_LENGTH = 3;
 const LANGUAGE_CODE_MIN = 2;
 const LANGUAGE_CODE_MAX = 5;
 const SEARCH_MAX = 200;
 const PER_PAGE_MAX = 100;
+const DEFAULT_PER_PAGE = 25;
 
 const SalarySchema = z.coerce.number().positive();
 
@@ -196,7 +197,7 @@ export const JobQuerySchema = z.object({
   remote: z.enum(['true', 'false'] as const).optional(),
   visa: z.enum(['true', 'false'] as const).optional(),
   page: z.coerce.number().int().min(1).default(1),
-  per_page: z.coerce.number().int().min(1).max(PER_PAGE_MAX).default(25),
+  per_page: z.coerce.number().int().min(1).max(PER_PAGE_MAX).default(DEFAULT_PER_PAGE),
   sort: z
     .enum(['newest', 'oldest', 'salary_desc'] as const)
     .default('newest'),

@@ -19,6 +19,35 @@ const RETRY_AFTER_SECONDS = 60;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+type JobForApply = {
+  id: string;
+  status: string;
+  applyInApp: boolean;
+  companyId: string;
+};
+
+const fetchJobForApply = async (jobId: string): Promise<JobForApply | null> =>
+  prisma.job.findUnique({
+    where: { id: jobId },
+    select: { id: true, status: true, applyInApp: true, companyId: true },
+  });
+
+const checkJobEligibility = (
+  job: JobForApply | null,
+  userCompanyId: string | null
+): string | null => {
+  if (!job || job.status !== 'ACTIVE') {
+    return 'not_found';
+  }
+  if (!job.applyInApp) {
+    return 'no_inapp';
+  }
+  if (userCompanyId !== null && userCompanyId === job.companyId) {
+    return 'own_company';
+  }
+  return null;
+};
+
 // POST /api/v1/jobs/[id]/apply — submit a candidature (CANDIDATE only)
 export const POST = async (request: NextRequest, context: RouteContext) => {
   const ip =
@@ -29,27 +58,24 @@ export const POST = async (request: NextRequest, context: RouteContext) => {
   }
 
   const user = await getSession();
-  if (!user) return unauthorized();
+  if (!user) {
+    return unauthorized();
+  }
   if (!hasRole(user, 'CANDIDATE')) {
     return forbidden();
   }
 
   const { id: jobId } = await context.params;
+  const job = await fetchJobForApply(jobId);
+  const issue = checkJobEligibility(job, user.companyId);
 
-  // Ensure the job exists and is active
-  const job = await prisma.job.findUnique({
-    where: { id: jobId },
-    select: { id: true, status: true, applyInApp: true, companyId: true },
-  });
-
-  if (!job || job.status !== 'ACTIVE') return notFound('Job');
-
-  if (!job.applyInApp) {
+  if (issue === 'not_found') {
+    return notFound('Job');
+  }
+  if (issue === 'no_inapp') {
     return badRequest('This job does not accept in-app applications.');
   }
-
-  // Candidates cannot apply to a job from their own company
-  if (user.companyId && user.companyId === job.companyId) {
+  if (issue === 'own_company') {
     return forbidden();
   }
 
@@ -57,13 +83,14 @@ export const POST = async (request: NextRequest, context: RouteContext) => {
   try {
     body = await request.json();
   } catch {
-    // Body is optional — default to empty object when not provided
     body = {};
   }
 
   const parsed = CreateApplicationSchema.safeParse(body);
   if (!parsed.success) {
-    return badRequest(parsed.error.issues.at(0)?.message ?? 'Invalid request body.');
+    return badRequest(
+      parsed.error.issues.at(0)?.message ?? 'Invalid request body.'
+    );
   }
 
   const { coverLetter, message, documentIds } = parsed.data;
@@ -76,29 +103,26 @@ export const POST = async (request: NextRequest, context: RouteContext) => {
         coverLetter,
         message,
         status: 'PENDING',
-        ...(documentIds.length > 0 && {
-          documents: {
-            create: documentIds.map((documentId) => ({ documentId })),
-          },
-        }),
+        documents: {
+          create: documentIds.map((documentId) => ({ documentId })),
+        },
       },
-      select: {
-        id: true,
-        status: true,
-        jobId: true,
-        createdAt: true,
-      },
+      select: { id: true, status: true, jobId: true, createdAt: true },
     });
 
     return created(application);
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2002') {
-        return conflict('You have already applied to this position.');
-      }
-      if (error.code === 'P2003') {
-        return badRequest('One or more documents were not found.');
-      }
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      return conflict('You have already applied to this position.');
+    }
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2003'
+    ) {
+      return badRequest('One or more documents were not found.');
     }
     return internalError();
   }

@@ -16,6 +16,8 @@ import { UpdateJobSchema } from '@/lib/validations/job';
 
 const RETRY_AFTER_SECONDS = 60;
 
+type RouteContext = { params: Promise<{ id: string }> };
+
 const getClientIp = (request: NextRequest) =>
   request.headers.get('x-forwarded-for')?.split(',').at(0)?.trim() ?? 'unknown';
 
@@ -73,7 +75,11 @@ const JOB_DETAIL_SELECT = {
   languages: { select: { language: true } },
 } satisfies Prisma.JobSelect;
 
-type RouteContext = { params: Promise<{ id: string }> };
+// Whether the current user may see a non-ACTIVE job.
+const userMayViewHiddenJob = async (companyId: string) => {
+  const user = await getSession();
+  return user !== null && isOwnerOrAdmin(user, companyId);
+};
 
 // GET /api/v1/jobs/[id] — public job detail
 export const GET = async (request: NextRequest, context: RouteContext) => {
@@ -91,18 +97,18 @@ export const GET = async (request: NextRequest, context: RouteContext) => {
       select: JOB_DETAIL_SELECT,
     });
 
-    if (!job) return notFound('Job');
+    if (!job) {
+      return notFound('Job');
+    }
 
-    // Only active jobs are public; owners/admin can see any status
     if (job.status !== 'ACTIVE') {
-      const user = await getSession();
-      if (!user || !isOwnerOrAdmin(user, job.companyId)) {
+      const allowed = await userMayViewHiddenJob(job.companyId);
+      if (!allowed) {
         return notFound('Job');
       }
     }
 
-    // Increment view count asynchronously — do not await so it does not delay response
-    void prisma.job.update({
+    await prisma.job.update({
       where: { id },
       data: { viewCount: { increment: 1 } },
     });
@@ -122,16 +128,22 @@ export const PUT = async (request: NextRequest, context: RouteContext) => {
   }
 
   const user = await getSession();
-  if (!user) return unauthorized();
+  if (!user) {
+    return unauthorized();
+  }
 
   const { id } = await context.params;
 
   const existing = await prisma.job.findUnique({
     where: { id },
-    select: { companyId: true, status: true },
+    select: { companyId: true },
   });
-  if (!existing) return notFound('Job');
-  if (!isOwnerOrAdmin(user, existing.companyId)) return forbidden();
+  if (!existing) {
+    return notFound('Job');
+  }
+  if (!isOwnerOrAdmin(user, existing.companyId)) {
+    return forbidden();
+  }
 
   let body: unknown;
   try {
@@ -142,24 +154,19 @@ export const PUT = async (request: NextRequest, context: RouteContext) => {
 
   const parsed = UpdateJobSchema.safeParse(body);
   if (!parsed.success) {
-    return badRequest(parsed.error.issues.at(0)?.message ?? 'Invalid request body.');
+    return badRequest(
+      parsed.error.issues.at(0)?.message ?? 'Invalid request body.'
+    );
   }
 
-  const {
-    careerLevels,
-    languages,
-    validThrough,
-    ...scalarFields
-  } = parsed.data;
+  const { careerLevels, languages, validThrough, ...scalarFields } = parsed.data;
 
   try {
     const job = await prisma.job.update({
       where: { id },
       data: {
         ...scalarFields,
-        ...(validThrough !== undefined && {
-          validThrough: new Date(validThrough),
-        }),
+        ...(validThrough !== undefined && { validThrough: new Date(validThrough) }),
         ...(careerLevels !== undefined && {
           careerLevels: {
             deleteMany: {},
@@ -173,25 +180,22 @@ export const PUT = async (request: NextRequest, context: RouteContext) => {
           },
         }),
       },
-      select: {
-        id: true,
-        slug: true,
-        title: true,
-        status: true,
-        updatedAt: true,
-      },
+      select: { id: true, slug: true, title: true, status: true, updatedAt: true },
     });
 
     return ok(job);
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2025') return notFound('Job');
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2025'
+    ) {
+      return notFound('Job');
     }
     return internalError();
   }
 };
 
-// DELETE /api/v1/jobs/[id] — archive (EMPLOYER) or hard-delete (ADMIN with ?permanent=true)
+// DELETE /api/v1/jobs/[id] — archive (EMPLOYER) or hard-delete (ADMIN ?permanent=true)
 export const DELETE = async (request: NextRequest, context: RouteContext) => {
   const ip = getClientIp(request);
   const rl = mutationRateLimit(ip);
@@ -200,7 +204,9 @@ export const DELETE = async (request: NextRequest, context: RouteContext) => {
   }
 
   const user = await getSession();
-  if (!user) return unauthorized();
+  if (!user) {
+    return unauthorized();
+  }
 
   const { id } = await context.params;
 
@@ -208,8 +214,12 @@ export const DELETE = async (request: NextRequest, context: RouteContext) => {
     where: { id },
     select: { companyId: true },
   });
-  if (!existing) return notFound('Job');
-  if (!isOwnerOrAdmin(user, existing.companyId)) return forbidden();
+  if (!existing) {
+    return notFound('Job');
+  }
+  if (!isOwnerOrAdmin(user, existing.companyId)) {
+    return forbidden();
+  }
 
   const permanent =
     user.role === 'ADMIN' &&
@@ -228,8 +238,11 @@ export const DELETE = async (request: NextRequest, context: RouteContext) => {
     });
     return ok(job);
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2025') return notFound('Job');
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2025'
+    ) {
+      return notFound('Job');
     }
     return internalError();
   }
